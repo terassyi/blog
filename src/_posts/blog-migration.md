@@ -34,3 +34,11 @@ description: migration of my blog
 ReactのGatsbyにしようかと考えましたがReact分からなくてしっくりこなかったのでVueを使用したVuepressにしました．
 テーマは[vuepress-theme-meteorlxy](https://vuepress-theme-meteorlxy.meteorlxy.cn/posts/2019/02/27/theme-guide-en.html)を使用しています．
 ほとんど変わったことはしていないので導入は公式に従って進めました．
+公開はGithub Pagesで行います．カスタムドメインやHTTPSにも対応してるしリポジトリのsettingページから簡単にできました．すごい．
+
+### その他アカウント
+TwitterやGithubのアカウント名も合わせて*spectrex02*から*terassyi*に変更しました．
+
+### まとめ
+ブログをvuepressに移行して爆速でポストできるようになった(はず)なのでこれから頑張りたいです．
+vuepressもGithub Pagesも簡単でめっちゃいいです．
