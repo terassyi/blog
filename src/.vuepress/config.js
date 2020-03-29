@@ -54,7 +54,7 @@ module.exports = {
           },
           // Twitter account and link
           twitter: {
-            account: 'meteorlxy_cn',
+            account: 'terassyi',
             link: 'https://twitter.com/terassyi_',
           },
         },
@@ -121,12 +121,12 @@ module.exports = {
       sidebarDepth: 2,
   
       // Comments config. See the [Posts Comments] section below.
-      comments: {
-        owner: 'terassyi',
-        repo: 'portfolio',
-        clientId: 'MY_CLIENT_ID',
-        clientSecret: 'MY_CLIENT_SECRET',
-      },
+      // comments: {
+      //   owner: 'terassyi',
+      //   repo: 'portfolio',
+      //   clientId: 'MY_CLIENT_ID',
+      //   clientSecret: 'MY_CLIENT_SECRET',
+      // },
   
       // Pagination config (Optional)
       pagination: {
@@ -147,4 +147,15 @@ module.exports = {
     markdown: {
       lineNumbers: true
     },
+
+    plugins: {
+      '@vuepress/google-analytics': {'ga': 'UA-151191455-1'},
+      'seo': {
+        title: ($page, $site) => $page.title || $site.title,
+        description: $page => $page.frontmatter.description,
+        twitterCard: _ => 'summary_large_image',
+        image: ($page, $site) => $page.frontmatter.image && (($site.themeConfig.domain || '') + $page.frontmatter.image),
+      },
+      'sitemap': { hostname: 'https://terassyi.net' },
+    }
   }

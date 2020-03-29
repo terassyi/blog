@@ -1,6 +1,13 @@
 {
-    "scripts": {
-      "dev": "vuepress dev src",
-      "build": "vuepress build src --dest dist"
-    }
+  "scripts": {
+    "dev": "vuepress dev src",
+    "build": "vuepress build src --dest dist"
+  },
+  "devDependencies": {
+    "@vuepress/plugin-google-analytics": "^1.4.0",
+    "vuepress-plugin-seo": "^0.1.2"
+  },
+  "dependencies": {
+    "vuepress-plugin-sitemap": "^2.3.1"
   }
+}
