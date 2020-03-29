@@ -5,7 +5,10 @@
   },
   "devDependencies": {
     "@vuepress/plugin-google-analytics": "^1.4.0",
-    "vuepress-plugin-seo": "^0.1.2"
+    "esm": "^3.2.25",
+    "vuepress": "^1.4.0",
+    "vuepress-plugin-seo": "^0.1.2",
+    "vuepress-theme-meteorlxy": "^1.8.0"
   },
   "dependencies": {
     "vuepress-plugin-sitemap": "^2.3.1"

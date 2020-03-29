@@ -61,7 +61,7 @@ module.exports = {
       },
 
       head: [
-        ['link', { rel: 'icon', type: 'image/png', href: '/img/favicon.ico' }],
+        ['link', { rel: 'icon', type: 'image/png', href: '/icon/favicon.png' }],
         ['link', { href: '/css/style.css', rel: 'stylesheet'}]
       ],
   

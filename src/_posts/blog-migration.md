@@ -34,4 +34,3 @@ description: migration of my blog
 ReactのGatsbyにしようかと考えましたがReact分からなくてしっくりこなかったのでVueを使用したVuepressにしました．
 テーマは[vuepress-theme-meteorlxy](https://vuepress-theme-meteorlxy.meteorlxy.cn/posts/2019/02/27/theme-guide-en.html)を使用しています．
 ほとんど変わったことはしていないので導入は公式に従って進めました．
-
