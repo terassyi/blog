@@ -62,7 +62,8 @@ module.exports = {
 
       head: [
         ['link', { rel: 'icon', type: 'image/png', href: '/icon/favicon.png' }],
-        ['link', { href: '/css/style.css', rel: 'stylesheet'}]
+        ['link', { href: '/css/style.css', rel: 'stylesheet'}],
+        ['meta', { name: 'google-site-verification', content: 'gQu0iky_ETYCzFPMKhAKA5OAhPuBQseCX8pMyF7M-8k' }]
       ],
   
       // Header Config (Optional)
@@ -156,6 +157,9 @@ module.exports = {
         twitterCard: _ => 'summary_large_image',
         image: ($page, $site) => $page.frontmatter.image && (($site.themeConfig.domain || '') + $page.frontmatter.image),
       },
-      'sitemap': { hostname: 'https://terassyi.net' },
+      'sitemap': { 
+        hostname: 'https://terassyi.net',
+        changefreq: "weekly"
+      },
     }
   }
