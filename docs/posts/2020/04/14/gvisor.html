@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="en-US">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>セキュアなコンテナgVisor | terassyi</title>
+    <meta name="description" content="Google製のセキュアなコンテナruntimeであるgVisorについて調べてみました．">
+    <meta name="generator" content="VuePress 1.4.0">
+    <meta property="article:published_time" content="2020-04-14T00:00:00.000Z"><meta property="og:site_name" content="terassyi"><meta property="og:title" content="セキュアなコンテナgVisor"><meta property="og:description" content="Google製のセキュアなコンテナruntimeであるgVisorについて調べてみました．"><meta property="og:type" content="website"><meta property="og:url" content="/posts/2020/04/14/gvisor.html"><meta name="twitter:title" content="セキュアなコンテナgVisor"><meta name="twitter:description" content="Google製のセキュアなコンテナruntimeであるgVisorについて調べてみました．"><meta name="twitter:url" content="/posts/2020/04/14/gvisor.html"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:label2" content="Filed under"><meta name="twitter:data2" content="contianer, gVisor, OCI-runtime, golang, security"><meta property="article:tag" content="contianer"><meta property="article:tag" content="gVisor"><meta property="article:tag" content="OCI-runtime"><meta property="article:tag" content="golang"><meta property="article:tag" content="security">
+    <link rel="preload" href="/assets/css/0.styles.59c2fb62.css" as="style"><link rel="preload" href="/assets/js/app.641ef63b.js" as="script"><link rel="preload" href="/assets/js/7.77a4036e.js" as="script"><link rel="preload" href="/assets/js/17.60d57c7c.js" as="script"><link rel="prefetch" href="/assets/js/1.40aaebb3.js"><link rel="prefetch" href="/assets/js/10.0230b77f.js"><link rel="prefetch" href="/assets/js/11.bf271c2b.js"><link rel="prefetch" href="/assets/js/12.0e6a0537.js"><link rel="prefetch" href="/assets/js/13.8c3e4266.js"><link rel="prefetch" href="/assets/js/14.26a509f6.js"><link rel="prefetch" href="/assets/js/15.1eb2c99f.js"><link rel="prefetch" href="/assets/js/16.d70ebf84.js"><link rel="prefetch" href="/assets/js/18.639551f2.js"><link rel="prefetch" href="/assets/js/19.5100b550.js"><link rel="prefetch" href="/assets/js/20.c9d29e29.js"><link rel="prefetch" href="/assets/js/21.2f8c5c91.js"><link rel="prefetch" href="/assets/js/22.b89a4315.js"><link rel="prefetch" href="/assets/js/23.350e2c2d.js"><link rel="prefetch" href="/assets/js/24.5d121e4f.js"><link rel="prefetch" href="/assets/js/3.fa4a4c2b.js"><link rel="prefetch" href="/assets/js/4.61b18747.js"><link rel="prefetch" href="/assets/js/5.fb685733.js"><link rel="prefetch" href="/assets/js/6.9e4fc271.js"><link rel="prefetch" href="/assets/js/8.eb9dc6e5.js"><link rel="prefetch" href="/assets/js/9.7a7e842c.js">
+    <link rel="stylesheet" href="/assets/css/0.styles.59c2fb62.css">
+  </head>
+  <body>
+    <div id="app" data-server-rendered="true"><div id="vuepress-theme-meteorlxy"><header class="header" style="background-size:cover;background-repeat:no-repeat;background-position:center;background-attachment:scroll;background-image:url(/img/bg.jpg);" data-v-7a046aea><div data-v-e4145d0a data-v-7a046aea><nav class="navbar" data-v-e4145d0a><div class="container" data-v-e4145d0a><a href="/" class="router-link-active" data-v-e4145d0a><span class="navbar-site-name" data-v-e4145d0a>
+          terassyi
+        </span></a> <div class="navbar-toggler" data-v-e4145d0a><svg class="icon" style="font-size:1.2em;" data-v-e4145d0a data-v-e4145d0a><title data-v-e4145d0a data-v-e4145d0a>menu</title><use xlink:href="#icon-menu" data-v-e4145d0a data-v-e4145d0a></use></svg></div> <div class="navbar-links" data-v-e4145d0a><a href="/" class="navbar-link" data-v-e4145d0a>
+            Home
+          </a><a href="/posts/" class="navbar-link router-link-active" data-v-e4145d0a>
+            Posts
+          </a><a href="/about/" class="navbar-link" data-v-e4145d0a>
+            About
+          </a></div></div></nav> <div class="navbar-holder" style="display:none;" data-v-e4145d0a></div></div> <div class="banner" data-v-98d6aa8c data-v-7a046aea data-v-7a046aea><div class="container" data-v-98d6aa8c><div class="center" data-v-98d6aa8c><h1 data-v-98d6aa8c data-v-7a046aea>
+          セキュアなコンテナgVisor
+        </h1></div></div></div></header> <div class="container clearfix show-aside" data-v-4dd605a1 data-v-4dd605a1><main class="main" data-v-4dd605a1><div class="post" data-v-4dd605a1 data-v-4dd605a1><section class="post-meta main-div" data-v-4e23451f><section class="post-date clearfix" data-v-4e23451f><span class="create-date" data-v-4e23451f>
+      Created : 2020-04-14
+    </span> <!----></section> <section class="post-links" data-v-4e23451f><a href="/posts/2020/04/01/arp.html" class="post-link" data-v-4e23451f>
+      Previous Post : ネットワークを作って理解しようとする(ARP編)
+    </a> <!----></section></section> <article class="main-div"><div class="post-content content content__default"><p>こんにちは．緊急事態宣言が出ているため相変わらず外出ができません．早く収束して欲しいものです．
+今回はdocker関連の話題についてです．Googleが開発したgVisorというコンテナランタイムについて調べてみました．</p> <h1 id="gvisor"><a href="#gvisor" class="header-anchor">#</a> gVisor</h1> <ul><li><a href="https://gvisor.dev/" target="_blank" rel="noopener noreferrer">gvisor.dev<svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" x="0px" y="0px" viewBox="0 0 100 100" width="15" height="15" class="icon outbound"><path fill="currentColor" d="M18.8,85.1h56l0,0c2.2,0,4-1.8,4-4v-32h-8v28h-48v-48h28v-8h-32l0,0c-2.2,0-4,1.8-4,4v56C14.8,83.3,16.6,85.1,18.8,85.1z"></path> <polygon fill="currentColor" points="45.7,48.7 51.3,54.3 77.2,28.5 77.2,37.2 85.2,37.2 85.2,14.9 62.8,14.9 62.8,22.9 71.5,22.9"></polygon></svg></a></li> <li><a href="https://github.com/google/gvisor" target="_blank" rel="noopener noreferrer">github.com/google/gvisor<svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" x="0px" y="0px" viewBox="0 0 100 100" width="15" height="15" class="icon outbound"><path fill="currentColor" d="M18.8,85.1h56l0,0c2.2,0,4-1.8,4-4v-32h-8v28h-48v-48h28v-8h-32l0,0c-2.2,0-4,1.8-4,4v56C14.8,83.3,16.6,85.1,18.8,85.1z"></path> <polygon fill="currentColor" points="45.7,48.7 51.3,54.3 77.2,28.5 77.2,37.2 85.2,37.2 85.2,14.9 62.8,14.9 62.8,22.9 71.5,22.9"></polygon></svg></a></li></ul> <h2 id="documentを意訳"><a href="#documentを意訳" class="header-anchor">#</a> Documentを意訳</h2> <p>gVisorとはGo言語で実装されたユーザー空間カーネルです．ほとんどのLinuxシステムコールインターフェースを実装しており，ホストOSと起動しているアプリケーションとの間に隔離層を設けることで安全性を実現しています．
+gVisorには<code>runsc</code>というOCI仕様に準拠したコンテナランタイムを含んでいます．<code>runsc</code>はDockerやKubernetesで使用でき，簡単にサンドボックス化されたコンテナを実行できます．
+gVisorは既存のサンドボックス化ツールと異なるアプローチを用いています．</p> <h2 id="architecture-guide"><a href="#architecture-guide" class="header-anchor">#</a> Architecture Guide</h2> <p>gVisorは信用されていないコンテナをサンドボックス化する仮想環境を作成します．ホストのカーネルによるシステムインターフェースは攻撃のリスクを少なくするために実装されたユーザー空間カーネルによってラップされます．gVisorは大きなオーバーヘッドはありませんが，リソースの利用に関してプロセスモデルを使用します．</p> <h3 id="how-is-this-different"><a href="#how-is-this-different" class="header-anchor">#</a> How is this different?</h3> <p>通常はコンテナを分離する手法としてgVisorとは異なる二つの手法が用いられます．</p> <ul><li><p>Machine-level virtualization
+KVMやXenのようなマシンレベルの仮想化はVirtual Machine Monitor(VMM)を経由したゲストカーネルに対して仮想化されたハードウェアをさらしてしまいます．仮想化されたハードウェアは通常軽量化され，追加のメカニズムがゲストとホストの可視性を高めるために使用されます．仮想マシン上で実行されるコンテナは高い分離性や互換性，パフォーマンスを得ることができますが，コンテナにとって追加のプロキシやエージェントを要求されるため，より大きなリソースや起動時間を必要としてしまいます．
+<img src="/img/arch1.png" alt="arch1"></p></li> <li><p>Rule-based execution
+seccompやSELinux, AppArmorのようなルールベースの実行はアプリケーションやコンテナにとって安全な特定のシステムコールのみを実行できます．これらは大抵の場合ルールを強化するためにホストカーネルの内部でフックされます．もしも十分に小さくカーネルの表面が作られているとしたら，この手法はアプリケーションをサンドボックス化し，元のパフォーマンスを維持する良い方法です．しかし，そのポリシーやルールを未知のアプリケーションやコンテナに対して定義するのは難しい場合が多いです．
+<img src="/img/arch2.png" alt="arch2">
+通常，ルールベース実行は多層防御のため追加層を設けます．</p></li></ul> <p>gVisorはそれらの分離手法と異なり，第三の分離手法をとっています．</p> <p>gVisorはアプリケーションシステムコールをゲストカーネルとして仮想化ハードウェアを必要とせずに介入します．gVisorはVMMやseccompといったものと同一のように見えます．しかし，このアーキテクチャはより柔軟なリソース管理を行うことができます．一方でこれは互換性の低下やより高いオーバーヘッドをもたらします．</p> <p><img src="/img/arch3.png" alt="arch3">
+gVisorは多層防御のためにルールベース実行を用います．
+gVisorの手法は<a href="http://user-mode-linux.sourceforge.net/" target="_blank" rel="noopener noreferrer">User Mode Linux(UML)<svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" x="0px" y="0px" viewBox="0 0 100 100" width="15" height="15" class="icon outbound"><path fill="currentColor" d="M18.8,85.1h56l0,0c2.2,0,4-1.8,4-4v-32h-8v28h-48v-48h28v-8h-32l0,0c-2.2,0-4,1.8-4,4v56C14.8,83.3,16.6,85.1,18.8,85.1z"></path> <polygon fill="currentColor" points="45.7,48.7 51.3,54.3 77.2,28.5 77.2,37.2 85.2,37.2 85.2,14.9 62.8,14.9 62.8,22.9 71.5,22.9"></polygon></svg></a>と似ています．しかし，UMLは内部でハードウェアを仮想化しています．
+それぞれの手法は特定の環境では優れています．例えば，マシンレベル仮想化は高い密度を実現するのが困難で，gVisorはシステムコールのパフォーマンスが低いです．</p> <h3 id="why-go"><a href="#why-go" class="header-anchor">#</a> Why Go?</h3> <p>gVisorは脆弱性を埋め込むことを防ぐためにGo言語で実装されています．</p> <h2 id="overview-platforms"><a href="#overview-platforms" class="header-anchor">#</a> Overview &amp; Platforms</h2> <p>gVisorのサンドボックスは複数のプロセスから構成されます．これらのプロセスは複数のコンテナを実行できる共有環境を構成します．
+それぞれのサンドボックスは隔離された<code>Sentry</code>と<code>Gofer</code>というインスタンスを持ちます．</p> <ul><li><code>Sentry</code>
+コンテナを実行し，アプリケーションによって発行されるシステムコールに対して介入し，応答するユーザー空間カーネル</li> <li><code>Gofer</code>
+コンテナにアクセスするファイルシステムを供給する
+<img src="/img/arch4.png" alt="arch4"></li></ul> <h3 id="runsc"><a href="#runsc" class="header-anchor">#</a> runsc</h3> <p>サンドボックス化されたコンテナへのエントリーポイントが<code>runsc</code>です．<code>runsc</code>はOCI仕様に準拠しています．これはOCI互換のファイルシステムバンドルを実行することができることを意味します．ファイルシステムバンドルは<code>config.json</code>を含み，コンテナ設定やコンテナのルートファイルシステムから構成されます．</p> <h3 id="sentry"><a href="#sentry" class="header-anchor">#</a> Sentry</h3> <p>SentryはgVisorの中で最も大きなコンポーネントです．これはユーザー空間カーネルとして動作します．Sentryは信用されていないアプリケーションに必要なカーネルの機能の全てを実装しています．これはほぼ全てのシステムコールやシグナル伝搬，メモリ管理，ページ管理，スレッドなどを実装しています．
+信用されていないアプリケーションがシステムコールを発行するとき，使用されているプラットフォームはシステムコールをSentryにリダイレクトします．Sentryはホストカーネルにそのままシステムコールを通すわけではありません．ユーザー空間アプリケーションとして，Sentryはホストのシステムコールを発行します．しかし，Sentryはアプリケーションが自身が発行したシステムコールを直接制御することを許可しません．
+SentryはLinux v4.4以上の環境が必要です．</p> <p>サンドボックスにより拡張されたファイルシステムはGoferによって送られます．</p> <h3 id="platforms"><a href="#platforms" class="header-anchor">#</a> Platforms</h3> <p>gVisorはプラットフォームに対してシステムコールの介入とコンテキストスイッチ，メモリマッピングの機能の実装を要求します．</p> <h4 id="ptrace"><a href="#ptrace" class="header-anchor">#</a> ptrace</h4> <p>ptraceはユーザーコードをホストのシステムコールを実行せずに実行するために<code>PTRACE_SYSEMU</code>を使用します．このプラットフォームはptraceが動作するどんな環境でも実行できます．</p> <h3 id="gofer"><a href="#gofer" class="header-anchor">#</a> Gofer</h3> <p><code>Gofer</code>は通常のホストLinuxプロセスです．Goferはそれぞれのサンドボックスにより起動され，Sentryに接続されます．Sentryプロセスは制限されたseccompコンテナの中でファイルシステムリソースにアクセスすることなしに起動されます．GoferはSentryに9Pプロトコル経由でファイルシステムリソースにアクセスすることを可能にします．</p> <h3 id="application"><a href="#application" class="header-anchor">#</a> Application</h3> <p>アプリケーションはgVisorのOCIランタイムバンドルによって提供される通常のLinuxバイナリです．gVisorはLinux v4.4の環境が必要です．従ってアプリケーションは変更されずに実行できる必要があります．</p> <h2 id="gvisorを使ってみる"><a href="#gvisorを使ってみる" class="header-anchor">#</a> gVisorを使ってみる</h2> <p>gVisorを実際に使ってみます．gVisorはLinux環境でしか動作しないので今回はVagrantを用いて仮想環境を用意してその中にDockerを導入します．
+リポジトリはこちら．<a href="https://github.com/terassyi/try-gVisor" target="_blank" rel="noopener noreferrer">try-gVisor<svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" x="0px" y="0px" viewBox="0 0 100 100" width="15" height="15" class="icon outbound"><path fill="currentColor" d="M18.8,85.1h56l0,0c2.2,0,4-1.8,4-4v-32h-8v28h-48v-48h28v-8h-32l0,0c-2.2,0-4,1.8-4,4v56C14.8,83.3,16.6,85.1,18.8,85.1z"></path> <polygon fill="currentColor" points="45.7,48.7 51.3,54.3 77.2,28.5 77.2,37.2 85.2,37.2 85.2,14.9 62.8,14.9 62.8,22.9 71.5,22.9"></polygon></svg></a>
+以下が<code>Vagrantfile</code>.</p> <div class="language- line-numbers-mode"><pre class="language-text"><code>Vagrant.configure(&quot;2&quot;) do |config|
+  config.vm.box = &quot;ubuntu/xenial64&quot;
+  config.vm.synced_folder &quot;./docker&quot;, &quot;/home/vagrant/work&quot;
+  config.vm.provision :shell, :path =&gt; &quot;./install.sh&quot;
+end
+</code></pre> <div class="line-numbers-wrapper"><span class="line-number">1</span><br><span class="line-number">2</span><br><span class="line-number">3</span><br><span class="line-number">4</span><br><span class="line-number">5</span><br><span class="line-number">6</span><br><span class="line-number">7</span><br></div></div><p>起動スクリプトとして<code>install.sh</code>を用意します．</p> <div class="language-shell line-numbers-mode"><pre class="language-shell"><code><span class="token shebang important">#! /bin/sh</span>
+<span class="token function">sudo</span> <span class="token function">apt</span> update
+<span class="token comment"># install docker</span>
+<span class="token function">sudo</span> <span class="token function">apt</span> -y <span class="token function">install</span> <span class="token punctuation">\</span>
+    apt-transport-https <span class="token punctuation">\</span>
+    ca-certificates <span class="token punctuation">\</span>
+    <span class="token function">curl</span> <span class="token punctuation">\</span>
+    gnupg-agent <span class="token punctuation">\</span>
+    software-properties-common
+<span class="token function">curl</span> -fsSL https://download.docker.com/linux/ubuntu/gpg <span class="token operator">|</span> <span class="token function">sudo</span> apt-key <span class="token function">add</span> -
+<span class="token function">sudo</span> add-apt-repository <span class="token punctuation">\</span>
+   <span class="token string">&quot;deb [arch=amd64] https://download.docker.com/linux/ubuntu \
+   <span class="token variable"><span class="token variable">$(</span>lsb_release -cs<span class="token variable">)</span></span> \
+   stable&quot;</span>
+<span class="token function">sudo</span> <span class="token function">apt</span> update
+<span class="token function">sudo</span> <span class="token function">apt</span> -y <span class="token function">install</span> docker.io
+<span class="token comment"># install gVisor</span>
+<span class="token function">curl</span> -fsSL https://gvisor.dev/archive.key <span class="token operator">|</span> <span class="token function">sudo</span> apt-key <span class="token function">add</span> -
+<span class="token function">sudo</span> add-apt-repository <span class="token string">&quot;deb https://storage.googleapis.com/gvisor/releases release main&quot;</span>
+<span class="token function">sudo</span> <span class="token function">apt-get</span> update <span class="token operator">&amp;&amp;</span> <span class="token function">sudo</span> <span class="token function">apt-get</span> <span class="token function">install</span> -y runsc
+<span class="token function">sudo</span> systemctl start docker
+<span class="token comment"># add docker user group</span>
+<span class="token function">sudo</span> <span class="token function">groupadd</span> docker
+<span class="token function">sudo</span> gpasswd -a <span class="token environment constant">$USER</span> docker
+<span class="token comment"># config runsc</span>
+<span class="token builtin class-name">echo</span> <span class="token string">'{
+    &quot;runtimes&quot;: {
+        &quot;runsc&quot;: {
+            &quot;path&quot;: &quot;/usr/bin/runsc&quot;
+        }
+    }
+}'</span> <span class="token operator">&gt;&gt;</span> /etc/docker/daemon.json
+<span class="token function">sudo</span> systemctl restart docker
+<span class="token function">sudo</span> systemctl <span class="token builtin class-name">enable</span> docker
+</code></pre> <div class="line-numbers-wrapper"><span class="line-number">1</span><br><span class="line-number">2</span><br><span class="line-number">3</span><br><span class="line-number">4</span><br><span class="line-number">5</span><br><span class="line-number">6</span><br><span class="line-number">7</span><br><span class="line-number">8</span><br><span class="line-number">9</span><br><span class="line-number">10</span><br><span class="line-number">11</span><br><span class="line-number">12</span><br><span class="line-number">13</span><br><span class="line-number">14</span><br><span class="line-number">15</span><br><span class="line-number">16</span><br><span class="line-number">17</span><br><span class="line-number">18</span><br><span class="line-number">19</span><br><span class="line-number">20</span><br><span class="line-number">21</span><br><span class="line-number">22</span><br><span class="line-number">23</span><br><span class="line-number">24</span><br><span class="line-number">25</span><br><span class="line-number">26</span><br><span class="line-number">27</span><br><span class="line-number">28</span><br><span class="line-number">29</span><br><span class="line-number">30</span><br><span class="line-number">31</span><br><span class="line-number">32</span><br><span class="line-number">33</span><br><span class="line-number">34</span><br><span class="line-number">35</span><br><span class="line-number">36</span><br><span class="line-number">37</span><br><span class="line-number">38</span><br><span class="line-number">39</span><br><span class="line-number">40</span><br><span class="line-number">41</span><br><span class="line-number">42</span><br><span class="line-number">43</span><br><span class="line-number">44</span><br></div></div><p>というわけで起動します．</p> <div class="language- line-numbers-mode"><pre class="language-text"><code>$ vagrant up
+</code></pre> <div class="line-numbers-wrapper"><span class="line-number">1</span><br></div></div><p>起動したら<code>ssh</code>で接続します．</p> <div class="language- line-numbers-mode"><pre class="language-text"><code>$ vagrant ssh
+</code></pre> <div class="line-numbers-wrapper"><span class="line-number">1</span><br></div></div><p>接続したらコンテナをrunscを使用して起動してみましょう．</p> <div class="language- line-numbers-mode"><pre class="language-text"><code>$ sudo docker run --runtime=runsc -it ubuntu dmesg
+</code></pre> <div class="line-numbers-wrapper"><span class="line-number">1</span><br></div></div><div class="language- line-numbers-mode"><pre class="language-text"><code>[    0.000000] Starting gVisor...
+[    0.513677] Checking naughty and nice process list...
+[    0.857696] Segmenting fault lines...
+[    1.293455] Creating process schedule...
+[    1.727520] Moving files to filing cabinet...
+[    1.889653] Rewriting operating system in Javascript...
+[    1.976582] Committing treasure map to memory...
+[    2.015297] Preparing for the zombie uprising...
+[    2.486752] Synthesizing system calls...
+[    2.578894] Creating cloned children...
+[    2.677559] Searching for socket adapter...
+[    3.025556] Ready!
+</code></pre> <div class="line-numbers-wrapper"><span class="line-number">1</span><br><span class="line-number">2</span><br><span class="line-number">3</span><br><span class="line-number">4</span><br><span class="line-number">5</span><br><span class="line-number">6</span><br><span class="line-number">7</span><br><span class="line-number">8</span><br><span class="line-number">9</span><br><span class="line-number">10</span><br><span class="line-number">11</span><br><span class="line-number">12</span><br></div></div><p>無事起動できたようです．</p> <h2 id="gvisorのソースコードを読む"><a href="#gvisorのソースコードを読む" class="header-anchor">#</a> gVisorのソースコードを読む</h2> <p>gVisorのリポジトリを手元に落として読んでみます．
+今回はGoLandを使用してみました．インターフェースの実装にも飛べるので便利ですね．</p> <h3 id="ディレクトリ構成"><a href="#ディレクトリ構成" class="header-anchor">#</a> ディレクトリ構成</h3> <p>トップレベルの構成はこんな感じです．</p> <div class="language- line-numbers-mode"><pre class="language-text"><code>.
+├── benchmarks
+├── g3doc
+├── kokoro
+├── pkg
+├── runsc
+├── scripts
+├── test
+├── tools
+└── vdso
+</code></pre> <div class="line-numbers-wrapper"><span class="line-number">1</span><br><span class="line-number">2</span><br><span class="line-number">3</span><br><span class="line-number">4</span><br><span class="line-number">5</span><br><span class="line-number">6</span><br><span class="line-number">7</span><br><span class="line-number">8</span><br><span class="line-number">9</span><br><span class="line-number">10</span><br></div></div><p>今回は<code>pkg</code>と<code>runsc</code>をみてみます．</p> <h3 id="runsc-2"><a href="#runsc-2" class="header-anchor">#</a> runsc</h3> <p>runscのディレクトリ構成はこちら</p> <div class="language- line-numbers-mode"><pre class="language-text"><code>.
+├── boot
+├── cgroup
+├── cmd
+├── console
+├── container
+├── criutil
+├── debian
+├── dockerutil
+├── flag
+├── fsgofer
+├── sandbox
+├── specutils
+└── testutil
+</code></pre> <div class="line-numbers-wrapper"><span class="line-number">1</span><br><span class="line-number">2</span><br><span class="line-number">3</span><br><span class="line-number">4</span><br><span class="line-number">5</span><br><span class="line-number">6</span><br><span class="line-number">7</span><br><span class="line-number">8</span><br><span class="line-number">9</span><br><span class="line-number">10</span><br><span class="line-number">11</span><br><span class="line-number">12</span><br><span class="line-number">13</span><br><span class="line-number">14</span><br></div></div><p>とりあえず怪しそうな<code>sandbox</code>パッケージから辿ってみます．</p> <h4 id="sandbox"><a href="#sandbox" class="header-anchor">#</a> sandbox</h4> <p><code>sandbox</code>パッケージにはサンドボックスプロセスを生成するための構造体やメソッドが定義されているようです．</p> <blockquote><p>Sandbox wraps a sandbox process.
+It is used to start/stop sandbox process (and associated processes like gofers), as well as for running and manipulating containers inside a running sandbox.
+Note: Sandbox must be immutable because a copy of it is saved for each container and changes would not be synchronized to all of them.</p></blockquote> <div class="language-go line-numbers-mode"><pre class="language-go"><code><span class="token keyword">type</span> Sandbox <span class="token keyword">struct</span> <span class="token punctuation">{</span>
+	<span class="token comment">// ID is the id of the sandbox (immutable). By convention, this is the same</span>
+	<span class="token comment">// ID as the first container run in the sandbox.</span>
+	ID <span class="token builtin">string</span> <span class="token string">`json:&quot;id&quot;`</span>
+	<span class="token comment">// Pid is the pid of the running sandbox (immutable). May be 0 if the sandbox</span>
+	<span class="token comment">// is not running.</span>
+	Pid <span class="token builtin">int</span> <span class="token string">`json:&quot;pid&quot;`</span>
+	<span class="token comment">// Cgroup has the cgroup configuration for the sandbox.</span>
+	Cgroup <span class="token operator">*</span>cgroup<span class="token punctuation">.</span>Cgroup <span class="token string">`json:&quot;cgroup&quot;`</span>
+	<span class="token comment">// child is set if a sandbox process is a child of the current process.</span>
+	<span class="token comment">//</span>
+	<span class="token comment">// This field isn't saved to json, because only a creator of sandbox</span>
+	<span class="token comment">// will have it as a child process.</span>
+	child <span class="token builtin">bool</span>
+	<span class="token comment">// status is an exit status of a sandbox process.</span>
+	status syscall<span class="token punctuation">.</span>WaitStatus
+	<span class="token comment">// statusMu protects status.</span>
+	statusMu sync<span class="token punctuation">.</span>Mutex
+<span class="token punctuation">}</span>
+</code></pre> <div class="line-numbers-wrapper"><span class="line-number">1</span><br><span class="line-number">2</span><br><span class="line-number">3</span><br><span class="line-number">4</span><br><span class="line-number">5</span><br><span class="line-number">6</span><br><span class="line-number">7</span><br><span class="line-number">8</span><br><span class="line-number">9</span><br><span class="line-number">10</span><br><span class="line-number">11</span><br><span class="line-number">12</span><br><span class="line-number">13</span><br><span class="line-number">14</span><br><span class="line-number">15</span><br><span class="line-number">16</span><br><span class="line-number">17</span><br><span class="line-number">18</span><br><span class="line-number">19</span><br><span class="line-number">20</span><br><span class="line-number">21</span><br><span class="line-number">22</span><br><span class="line-number">23</span><br><span class="line-number">24</span><br></div></div><p><code>Sandbox.Pid</code>がサンドボックスとして動作しているプロセスのPIDのようです．New関数の<code>Sandbox.createSandboxProcess()</code>メソッドでプロセスを生成しています．非常に長い関数なので詳細は載せませんが名前空間を指定したり，引数を指定して</p> <div class="language-go line-numbers-mode"><pre class="language-go"><code><span class="token keyword">func</span> <span class="token function">StartInNS</span><span class="token punctuation">(</span>cmd <span class="token operator">*</span>exec<span class="token punctuation">.</span>Cmd<span class="token punctuation">,</span> nss <span class="token punctuation">[</span><span class="token punctuation">]</span>specs<span class="token punctuation">.</span>LinuxNamespace<span class="token punctuation">)</span> <span class="token builtin">error</span> <span class="token punctuation">{</span>
+    <span class="token comment">// ...</span>
+    <span class="token keyword">return</span> cmd<span class="token punctuation">.</span><span class="token function">Start</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+<span class="token punctuation">}</span>
+</code></pre> <div class="line-numbers-wrapper"><span class="line-number">1</span><br><span class="line-number">2</span><br><span class="line-number">3</span><br><span class="line-number">4</span><br></div></div><p>を呼び出します．この関数は内部で<code>cmd.Start()</code>を呼び出してプロセスを生成しているようです．</p> <p><code>sandbox.New()</code>を呼び出している箇所を辿ってみると<code>container</code>パッケージで呼び出されているようです．</p> <h4 id="container"><a href="#container" class="header-anchor">#</a> container</h4> <p>続いて<code>container</code>パッケージをみてみます．</p> <div class="language-go line-numbers-mode"><pre class="language-go"><code><span class="token keyword">type</span> Container <span class="token keyword">struct</span> <span class="token punctuation">{</span>
+	<span class="token comment">// ID is the container ID.</span>
+	ID <span class="token builtin">string</span> <span class="token string">`json:&quot;id&quot;`</span>
+	<span class="token comment">// Spec is the OCI runtime spec that configures this container.</span>
+	Spec <span class="token operator">*</span>specs<span class="token punctuation">.</span>Spec <span class="token string">`json:&quot;spec&quot;`</span>
+	<span class="token comment">// BundleDir is the directory containing the container bundle.</span>
+	BundleDir <span class="token builtin">string</span> <span class="token string">`json:&quot;bundleDir&quot;`</span>
+	<span class="token comment">// CreatedAt is the time the container was created.</span>
+	CreatedAt time<span class="token punctuation">.</span>Time <span class="token string">`json:&quot;createdAt&quot;`</span>
+	<span class="token comment">// Owner is the container owner.</span>
+	Owner <span class="token builtin">string</span> <span class="token string">`json:&quot;owner&quot;`</span>
+	<span class="token comment">// ConsoleSocket is the path to a unix domain socket that will receive</span>
+	<span class="token comment">// the console FD.</span>
+	ConsoleSocket <span class="token builtin">string</span> <span class="token string">`json:&quot;consoleSocket&quot;`</span>
+	<span class="token comment">// Status is the current container Status.</span>
+	Status Status <span class="token string">`json:&quot;status&quot;`</span>
+	<span class="token comment">// GoferPid is the PID of the gofer running along side the sandbox. May</span>
+	<span class="token comment">// be 0 if the gofer has been killed.</span>
+	GoferPid <span class="token builtin">int</span> <span class="token string">`json:&quot;goferPid&quot;`</span>
+	<span class="token comment">// Sandbox is the sandbox this container is running in. It's set when the</span>
+	<span class="token comment">// container is created and reset when the sandbox is destroyed.</span>
+	Sandbox <span class="token operator">*</span>sandbox<span class="token punctuation">.</span>Sandbox <span class="token string">`json:&quot;sandbox&quot;`</span>
+	<span class="token comment">// Saver handles load from/save to the state file safely from multiple</span>
+	<span class="token comment">// processes.</span>
+	Saver StateFile <span class="token string">`json:&quot;saver&quot;`</span>
+	<span class="token comment">//</span>
+	<span class="token comment">// Fields below this line are not saved in the state file and will not</span>
+	<span class="token comment">// be preserved across commands.</span>
+	<span class="token comment">//</span>
+	<span class="token comment">// goferIsChild is set if a gofer process is a child of the current process.</span>
+	<span class="token comment">//</span>
+	<span class="token comment">// This field isn't saved to json, because only a creator of a gofer</span>
+	<span class="token comment">// process will have it as a child process.</span>
+	goferIsChild <span class="token builtin">bool</span>
+<span class="token punctuation">}</span>
+</code></pre> <div class="line-numbers-wrapper"><span class="line-number">1</span><br><span class="line-number">2</span><br><span class="line-number">3</span><br><span class="line-number">4</span><br><span class="line-number">5</span><br><span class="line-number">6</span><br><span class="line-number">7</span><br><span class="line-number">8</span><br><span class="line-number">9</span><br><span class="line-number">10</span><br><span class="line-number">11</span><br><span class="line-number">12</span><br><span class="line-number">13</span><br><span class="line-number">14</span><br><span class="line-number">15</span><br><span class="line-number">16</span><br><span class="line-number">17</span><br><span class="line-number">18</span><br><span class="line-number">19</span><br><span class="line-number">20</span><br><span class="line-number">21</span><br><span class="line-number">22</span><br><span class="line-number">23</span><br><span class="line-number">24</span><br><span class="line-number">25</span><br><span class="line-number">26</span><br><span class="line-number">27</span><br><span class="line-number">28</span><br><span class="line-number">29</span><br><span class="line-number">30</span><br><span class="line-number">31</span><br><span class="line-number">32</span><br><span class="line-number">33</span><br><span class="line-number">34</span><br><span class="line-number">35</span><br><span class="line-number">36</span><br><span class="line-number">37</span><br><span class="line-number">38</span><br><span class="line-number">39</span><br><span class="line-number">40</span><br><span class="line-number">41</span><br><span class="line-number">42</span><br><span class="line-number">43</span><br><span class="line-number">44</span><br><span class="line-number">45</span><br><span class="line-number">46</span><br></div></div><p>こちらが<code>Container</code>構造体．<code>Sandbox</code>, <code>GoferPid</code>といったフィールドを持ってます．<code>container.New()</code>関数内で<code>sandbox.New()</code>関数や<code>Container.createGoferProcess()</code>メソッドを呼び出しGoferプロセスを生成しているようです．今回はこちらは詳しくみません．
+<code>Container</code>構造体には<code>Start</code>, <code>Run</code>, <code>Execute</code>などのメソッドが定義されています．
+<code>container.New()</code>は<code>pkg/cmd</code>で呼び出されているようです．というわけで<code>cmd</code>パッケージをみてみます．</p> <h4 id="cmd"><a href="#cmd" class="header-anchor">#</a> cmd</h4> <p>cmdパッケージには各種コマンドが定義されているようです．
+cmdパッケージ内のコマンドの名前になってそうな各ファイルの中に構造体が定義してあり，それぞれの構造体は<code>subcommands.Command</code>を実装しているようです．<code>subcommands</code>パッケージは<a href="https://github.com/google/subcommands" target="_blank" rel="noopener noreferrer">google/subcommands<svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" x="0px" y="0px" viewBox="0 0 100 100" width="15" height="15" class="icon outbound"><path fill="currentColor" d="M18.8,85.1h56l0,0c2.2,0,4-1.8,4-4v-32h-8v28h-48v-48h28v-8h-32l0,0c-2.2,0-4,1.8-4,4v56C14.8,83.3,16.6,85.1,18.8,85.1z"></path> <polygon fill="currentColor" points="45.7,48.7 51.3,54.3 77.2,28.5 77.2,37.2 85.2,37.2 85.2,14.9 62.8,14.9 62.8,22.9 71.5,22.9"></polygon></svg></a>ですね．CLIを作成する際に使用するパッケージのようです．Rustのclapみたいな感じかな．各構造体の<code>Execute()</code>メソッドが実行されるコマンドの実体のようです．<code>cmd/boot.go</code>に定義されている<code>Boot</code>型の<code>Boot.Execute()</code>でサンドボックスが待ち状態で起動するようです．
+<code>Boot.Execute()</code>メソッドでは<code>Loader</code>構造体を生成して<code>Loader.Run()</code>メソッドを呼び出しているようです．</p> <div class="language-go line-numbers-mode"><pre class="language-go"><code><span class="token comment">// Create the loader.</span>
+<span class="token keyword">func</span> <span class="token punctuation">(</span>b <span class="token operator">*</span>Boot<span class="token punctuation">)</span> <span class="token function">Execute</span><span class="token punctuation">(</span><span class="token boolean">_</span> context<span class="token punctuation">.</span>Context<span class="token punctuation">,</span> f <span class="token operator">*</span>flag<span class="token punctuation">.</span>FlagSet<span class="token punctuation">,</span> args <span class="token operator">...</span><span class="token keyword">interface</span><span class="token punctuation">{</span><span class="token punctuation">}</span><span class="token punctuation">)</span> subcommands<span class="token punctuation">.</span>ExitStatus <span class="token punctuation">{</span>
+    <span class="token comment">// 省略</span>
+	bootArgs <span class="token operator">:=</span> boot<span class="token punctuation">.</span>Args<span class="token punctuation">{</span>
+		ID<span class="token punctuation">:</span>           f<span class="token punctuation">.</span><span class="token function">Arg</span><span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+		Spec<span class="token punctuation">:</span>         spec<span class="token punctuation">,</span>
+		Conf<span class="token punctuation">:</span>         conf<span class="token punctuation">,</span>
+		ControllerFD<span class="token punctuation">:</span> b<span class="token punctuation">.</span>controllerFD<span class="token punctuation">,</span>
+		Device<span class="token punctuation">:</span>       os<span class="token punctuation">.</span><span class="token function">NewFile</span><span class="token punctuation">(</span><span class="token function">uintptr</span><span class="token punctuation">(</span>b<span class="token punctuation">.</span>deviceFD<span class="token punctuation">)</span><span class="token punctuation">,</span> <span class="token string">&quot;platform device&quot;</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+		GoferFDs<span class="token punctuation">:</span>     b<span class="token punctuation">.</span>ioFDs<span class="token punctuation">.</span><span class="token function">GetArray</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+		StdioFDs<span class="token punctuation">:</span>     b<span class="token punctuation">.</span>stdioFDs<span class="token punctuation">.</span><span class="token function">GetArray</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+		Console<span class="token punctuation">:</span>      b<span class="token punctuation">.</span>console<span class="token punctuation">,</span>
+		NumCPU<span class="token punctuation">:</span>       b<span class="token punctuation">.</span>cpuNum<span class="token punctuation">,</span>
+		TotalMem<span class="token punctuation">:</span>     b<span class="token punctuation">.</span>totalMem<span class="token punctuation">,</span>
+		UserLogFD<span class="token punctuation">:</span>    b<span class="token punctuation">.</span>userLogFD<span class="token punctuation">,</span>
+	<span class="token punctuation">}</span>
+    l<span class="token punctuation">,</span> err <span class="token operator">:=</span> boot<span class="token punctuation">.</span><span class="token function">New</span><span class="token punctuation">(</span>bootArgs<span class="token punctuation">)</span>
+    <span class="token comment">// 省略</span>
+    <span class="token comment">// Run the application and wait for it to finish.</span>
+	<span class="token keyword">if</span> err <span class="token operator">:=</span> l<span class="token punctuation">.</span><span class="token function">Run</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span> err <span class="token operator">!=</span> <span class="token boolean">nil</span> <span class="token punctuation">{</span>
+		l<span class="token punctuation">.</span><span class="token function">Destroy</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+		<span class="token function">Fatalf</span><span class="token punctuation">(</span><span class="token string">&quot;running sandbox: %v&quot;</span><span class="token punctuation">,</span> err<span class="token punctuation">)</span>
+    <span class="token punctuation">}</span>
+    <span class="token comment">// 省略</span>
+<span class="token punctuation">}</span>
+</code></pre> <div class="line-numbers-wrapper"><span class="line-number">1</span><br><span class="line-number">2</span><br><span class="line-number">3</span><br><span class="line-number">4</span><br><span class="line-number">5</span><br><span class="line-number">6</span><br><span class="line-number">7</span><br><span class="line-number">8</span><br><span class="line-number">9</span><br><span class="line-number">10</span><br><span class="line-number">11</span><br><span class="line-number">12</span><br><span class="line-number">13</span><br><span class="line-number">14</span><br><span class="line-number">15</span><br><span class="line-number">16</span><br><span class="line-number">17</span><br><span class="line-number">18</span><br><span class="line-number">19</span><br><span class="line-number">20</span><br><span class="line-number">21</span><br><span class="line-number">22</span><br><span class="line-number">23</span><br><span class="line-number">24</span><br><span class="line-number">25</span><br><span class="line-number">26</span><br><span class="line-number">27</span><br><span class="line-number">28</span><br></div></div><p><code>Loader.Run()</code>でサンドボックスを起動しているのかな？
+<code>Loader</code>を詳しくみてみましょう．<code>cmd/boot</code>をみてみます．</p> <h4 id="boot"><a href="#boot" class="header-anchor">#</a> boot</h4> <p><code>boot</code>パッケージに定義されている<code>Loader</code>型を覗いてみます．</p> <div class="language-go line-numbers-mode"><pre class="language-go"><code><span class="token comment">// Loader keeps state needed to start the kernel and run the container..</span>
+<span class="token keyword">type</span> Loader <span class="token keyword">struct</span> <span class="token punctuation">{</span>
+	<span class="token comment">// k is the kernel.</span>
+	k <span class="token operator">*</span>kernel<span class="token punctuation">.</span>Kernel
+	<span class="token comment">// ctrl is the control server.</span>
+	ctrl <span class="token operator">*</span>controller
+	conf <span class="token operator">*</span>Config
+	<span class="token comment">// console is set to true if terminal is enabled.</span>
+	console <span class="token builtin">bool</span>
+	watchdog <span class="token operator">*</span>watchdog<span class="token punctuation">.</span>Watchdog
+	<span class="token comment">// stdioFDs contains stdin, stdout, and stderr.</span>
+	stdioFDs <span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token builtin">int</span>
+	<span class="token comment">// goferFDs are the FDs that attach the sandbox to the gofers.</span>
+	goferFDs <span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token builtin">int</span>
+	<span class="token comment">// spec is the base configuration for the root container.</span>
+	spec <span class="token operator">*</span>specs<span class="token punctuation">.</span>Spec
+	<span class="token comment">// stopSignalForwarding disables forwarding of signals to the sandboxed</span>
+	<span class="token comment">// container. It should be called when a sandbox is destroyed.</span>
+	stopSignalForwarding <span class="token keyword">func</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+	<span class="token comment">// restore is set to true if we are restoring a container.</span>
+	restore <span class="token builtin">bool</span>
+	<span class="token comment">// rootProcArgs refers to the root sandbox init task.</span>
+	rootProcArgs kernel<span class="token punctuation">.</span>CreateProcessArgs
+	<span class="token comment">// sandboxID is the ID for the whole sandbox.</span>
+	sandboxID <span class="token builtin">string</span>
+	<span class="token comment">// mu guards processes.</span>
+	mu sync<span class="token punctuation">.</span>Mutex
+	<span class="token comment">// processes maps containers init process and invocation of exec. Root</span>
+	<span class="token comment">// processes are keyed with container ID and pid=0, while exec invocations</span>
+	<span class="token comment">// have the corresponding pid set.</span>
+	<span class="token comment">//</span>
+	<span class="token comment">// processes is guardded by mu.</span>
+	processes <span class="token keyword">map</span><span class="token punctuation">[</span>execID<span class="token punctuation">]</span><span class="token operator">*</span>execProcess
+	<span class="token comment">// mountHints provides extra information about mounts for containers that</span>
+	<span class="token comment">// apply to the entire pod.</span>
+	mountHints <span class="token operator">*</span>podMountHints
+<span class="token punctuation">}</span>
+</code></pre> <div class="line-numbers-wrapper"><span class="line-number">1</span><br><span class="line-number">2</span><br><span class="line-number">3</span><br><span class="line-number">4</span><br><span class="line-number">5</span><br><span class="line-number">6</span><br><span class="line-number">7</span><br><span class="line-number">8</span><br><span class="line-number">9</span><br><span class="line-number">10</span><br><span class="line-number">11</span><br><span class="line-number">12</span><br><span class="line-number">13</span><br><span class="line-number">14</span><br><span class="line-number">15</span><br><span class="line-number">16</span><br><span class="line-number">17</span><br><span class="line-number">18</span><br><span class="line-number">19</span><br><span class="line-number">20</span><br><span class="line-number">21</span><br><span class="line-number">22</span><br><span class="line-number">23</span><br><span class="line-number">24</span><br><span class="line-number">25</span><br><span class="line-number">26</span><br><span class="line-number">27</span><br><span class="line-number">28</span><br><span class="line-number">29</span><br><span class="line-number">30</span><br><span class="line-number">31</span><br><span class="line-number">32</span><br><span class="line-number">33</span><br><span class="line-number">34</span><br><span class="line-number">35</span><br><span class="line-number">36</span><br><span class="line-number">37</span><br><span class="line-number">38</span><br><span class="line-number">39</span><br><span class="line-number">40</span><br><span class="line-number">41</span><br><span class="line-number">42</span><br><span class="line-number">43</span><br><span class="line-number">44</span><br><span class="line-number">45</span><br><span class="line-number">46</span><br><span class="line-number">47</span><br><span class="line-number">48</span><br><span class="line-number">49</span><br><span class="line-number">50</span><br><span class="line-number">51</span><br></div></div><p><code>Loader</code>のフィールドには<code>k *kernel.Kernel</code>や<code>goferFDs []int</code>のような気になるフィールドがいくつかあります．
+全部見ているとキリがないので<code>Loader.Run()</code>を覗いてみます．
+<code>Loader.Run()</code>は<code>Loader.run()</code>を呼び出しているのでそちらをみます．</p> <div class="language-go line-numbers-mode"><pre class="language-go"><code><span class="token keyword">func</span> <span class="token punctuation">(</span>l <span class="token operator">*</span>Loader<span class="token punctuation">)</span> <span class="token function">run</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token builtin">error</span> <span class="token punctuation">{</span>
+    <span class="token comment">// 省略</span>
+    <span class="token keyword">return</span> l<span class="token punctuation">.</span>k<span class="token punctuation">.</span><span class="token function">Start</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+<span class="token punctuation">}</span>
+</code></pre> <div class="line-numbers-wrapper"><span class="line-number">1</span><br><span class="line-number">2</span><br><span class="line-number">3</span><br><span class="line-number">4</span><br></div></div><p>このメソッドはいろいろな処理をしているようです．気になる関数を列挙してみました．</p> <ul><li>Loader.installSeccompFilters()</li> <li>createFDTable()</li> <li>startGoferMonitor()
+<blockquote><p>startGoferMonitor runs a goroutine to monitor gofer's health. It polls on
+the gofer FDs looking for disconnects, and destroys the container if a disconnect occurs in any of the gofer FDs.</p></blockquote></li> <li>processHints()</li> <li>CreateProcess()
+<blockquote><p>CreateProcess creates a new task in a new thread group with the given options. The new task has no parent and is in the root PID namespace. If k.Start() has already been called, then the created process must be started by calling kernel.StartProcess(tg). If k.Start() has not yet been called, then the created task will begin running when k.Start() is called. CreateProcess has no analogue in Linux; it is used to create the initial application task, as well as processes started by the control server.</p></blockquote></li> <li>Loader.Kernel.Start()</li></ul> <p>こちらも別の機会にみてみたいと思います．
+とりあえず<code>Kernel.Start()</code>をみてみます．このメソッドは<code>pkg/sentry</code>に定義されているので<code>pkg/sentry</code>をみてみます．やっと<code>Sentry</code>にたどり着きました．</p> <h3 id="pkg"><a href="#pkg" class="header-anchor">#</a> pkg</h3> <p>ディレクトリ構成はこちら</p> <div class="language- line-numbers-mode"><pre class="language-text"><code>.
+├── abi
+├── amutex
+├── atomicbitops
+├── binary
+├── bits
+├── bpf
+├── buffer
+├── compressio
+├── context
+├── control
+├── cpuid
+├── eventchannel
+├── fd
+├── fdchannel
+├── fdnotifier
+├── flipcall
+├── fspath
+├── gate
+├── gohacks
+├── goid
+├── ilist
+├── linewriter
+├── log
+├── memutil
+├── metric
+├── p9
+├── pool
+├── procid
+├── rand
+├── refs
+├── safecopy
+├── safemem
+├── seccomp
+├── secio
+├── segment
+├── sentry
+├── sleep
+├── state
+├── sync
+├── syncevent
+├── syserr
+├── syserror
+├── tcpip
+├── tmutex
+├── unet
+├── urpc
+├── usermem
+└── waiter
+</code></pre> <div class="line-numbers-wrapper"><span class="line-number">1</span><br><span class="line-number">2</span><br><span class="line-number">3</span><br><span class="line-number">4</span><br><span class="line-number">5</span><br><span class="line-number">6</span><br><span class="line-number">7</span><br><span class="line-number">8</span><br><span class="line-number">9</span><br><span class="line-number">10</span><br><span class="line-number">11</span><br><span class="line-number">12</span><br><span class="line-number">13</span><br><span class="line-number">14</span><br><span class="line-number">15</span><br><span class="line-number">16</span><br><span class="line-number">17</span><br><span class="line-number">18</span><br><span class="line-number">19</span><br><span class="line-number">20</span><br><span class="line-number">21</span><br><span class="line-number">22</span><br><span class="line-number">23</span><br><span class="line-number">24</span><br><span class="line-number">25</span><br><span class="line-number">26</span><br><span class="line-number">27</span><br><span class="line-number">28</span><br><span class="line-number">29</span><br><span class="line-number">30</span><br><span class="line-number">31</span><br><span class="line-number">32</span><br><span class="line-number">33</span><br><span class="line-number">34</span><br><span class="line-number">35</span><br><span class="line-number">36</span><br><span class="line-number">37</span><br><span class="line-number">38</span><br><span class="line-number">39</span><br><span class="line-number">40</span><br><span class="line-number">41</span><br><span class="line-number">42</span><br><span class="line-number">43</span><br><span class="line-number">44</span><br><span class="line-number">45</span><br><span class="line-number">46</span><br><span class="line-number">47</span><br><span class="line-number">48</span><br><span class="line-number">49</span><br></div></div><h3 id="sentry-2"><a href="#sentry-2" class="header-anchor">#</a> sentry</h3> <p>gVisorの核となるコンポーネント．Sentryでユーザー空間カーネルを実現している．</p> <h4 id="kernel"><a href="#kernel" class="header-anchor">#</a> kernel</h4> <p><code>pkg/sentry/kernel</code>に<code>Kernel</code>型が定義されています．
+<code>Kernel.Start()</code>がこちら．</p> <div class="language-go line-numbers-mode"><pre class="language-go"><code><span class="token comment">// Start starts execution of all tasks in k.</span>
+<span class="token comment">//</span>
+<span class="token comment">// Preconditions: Start may be called exactly once.</span>
+<span class="token keyword">func</span> <span class="token punctuation">(</span>k <span class="token operator">*</span>Kernel<span class="token punctuation">)</span> <span class="token function">Start</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token builtin">error</span> <span class="token punctuation">{</span>
+	k<span class="token punctuation">.</span>extMu<span class="token punctuation">.</span><span class="token function">Lock</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+	<span class="token keyword">defer</span> k<span class="token punctuation">.</span>extMu<span class="token punctuation">.</span><span class="token function">Unlock</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+	<span class="token keyword">if</span> k<span class="token punctuation">.</span>globalInit <span class="token operator">==</span> <span class="token boolean">nil</span> <span class="token punctuation">{</span>
+		<span class="token keyword">return</span> fmt<span class="token punctuation">.</span><span class="token function">Errorf</span><span class="token punctuation">(</span><span class="token string">&quot;kernel contains no tasks&quot;</span><span class="token punctuation">)</span>
+	<span class="token punctuation">}</span>
+	<span class="token keyword">if</span> k<span class="token punctuation">.</span>started <span class="token punctuation">{</span>
+		<span class="token keyword">return</span> fmt<span class="token punctuation">.</span><span class="token function">Errorf</span><span class="token punctuation">(</span><span class="token string">&quot;kernel already started&quot;</span><span class="token punctuation">)</span>
+	<span class="token punctuation">}</span>
+	k<span class="token punctuation">.</span>started <span class="token operator">=</span> <span class="token boolean">true</span>
+	k<span class="token punctuation">.</span>cpuClockTicker <span class="token operator">=</span> ktime<span class="token punctuation">.</span><span class="token function">NewTimer</span><span class="token punctuation">(</span>k<span class="token punctuation">.</span>monotonicClock<span class="token punctuation">,</span> <span class="token function">newKernelCPUClockTicker</span><span class="token punctuation">(</span>k<span class="token punctuation">)</span><span class="token punctuation">)</span>
+	k<span class="token punctuation">.</span>cpuClockTicker<span class="token punctuation">.</span><span class="token function">Swap</span><span class="token punctuation">(</span>ktime<span class="token punctuation">.</span>Setting<span class="token punctuation">{</span>
+		Enabled<span class="token punctuation">:</span> <span class="token boolean">true</span><span class="token punctuation">,</span>
+		Period<span class="token punctuation">:</span>  linux<span class="token punctuation">.</span>ClockTick<span class="token punctuation">,</span>
+	<span class="token punctuation">}</span><span class="token punctuation">)</span>
+	<span class="token comment">// If k was created by LoadKernelFrom, timers were stopped during</span>
+	<span class="token comment">// Kernel.SaveTo and need to be resumed. If k was created by NewKernel,</span>
+	<span class="token comment">// this is a no-op.</span>
+	k<span class="token punctuation">.</span><span class="token function">resumeTimeLocked</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+	<span class="token comment">// Start task goroutines.</span>
+	k<span class="token punctuation">.</span>tasks<span class="token punctuation">.</span>mu<span class="token punctuation">.</span><span class="token function">RLock</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+	<span class="token keyword">defer</span> k<span class="token punctuation">.</span>tasks<span class="token punctuation">.</span>mu<span class="token punctuation">.</span><span class="token function">RUnlock</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+	<span class="token keyword">for</span> t<span class="token punctuation">,</span> tid <span class="token operator">:=</span> <span class="token keyword">range</span> k<span class="token punctuation">.</span>tasks<span class="token punctuation">.</span>Root<span class="token punctuation">.</span>tids <span class="token punctuation">{</span>
+		t<span class="token punctuation">.</span><span class="token function">Start</span><span class="token punctuation">(</span>tid<span class="token punctuation">)</span>
+	<span class="token punctuation">}</span>
+	<span class="token keyword">return</span> <span class="token boolean">nil</span>
+<span class="token punctuation">}</span>
+</code></pre> <div class="line-numbers-wrapper"><span class="line-number">1</span><br><span class="line-number">2</span><br><span class="line-number">3</span><br><span class="line-number">4</span><br><span class="line-number">5</span><br><span class="line-number">6</span><br><span class="line-number">7</span><br><span class="line-number">8</span><br><span class="line-number">9</span><br><span class="line-number">10</span><br><span class="line-number">11</span><br><span class="line-number">12</span><br><span class="line-number">13</span><br><span class="line-number">14</span><br><span class="line-number">15</span><br><span class="line-number">16</span><br><span class="line-number">17</span><br><span class="line-number">18</span><br><span class="line-number">19</span><br><span class="line-number">20</span><br><span class="line-number">21</span><br><span class="line-number">22</span><br><span class="line-number">23</span><br><span class="line-number">24</span><br><span class="line-number">25</span><br><span class="line-number">26</span><br><span class="line-number">27</span><br><span class="line-number">28</span><br><span class="line-number">29</span><br><span class="line-number">30</span><br><span class="line-number">31</span><br><span class="line-number">32</span><br></div></div><p><code>Task.Start(ThreadID)</code>でタスクを起動しているようです．
+このメソッドの処理はこんな感じ．</p> <blockquote><p>'tid' must be the task's TID in the root PID namespace and it's used for debugging purposes only (set as parameter to Task.run to make it visible in stack dumps).</p></blockquote> <div class="language-go line-numbers-mode"><pre class="language-go"><code><span class="token keyword">func</span> <span class="token punctuation">(</span>t <span class="token operator">*</span>Task<span class="token punctuation">)</span> <span class="token function">Start</span><span class="token punctuation">(</span>tid ThreadID<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+	<span class="token comment">// If the task was restored, it may be &quot;starting&quot; after having already exited.</span>
+	<span class="token keyword">if</span> t<span class="token punctuation">.</span>runState <span class="token operator">==</span> <span class="token boolean">nil</span> <span class="token punctuation">{</span>
+		<span class="token keyword">return</span>
+	<span class="token punctuation">}</span>
+	t<span class="token punctuation">.</span>goroutineStopped<span class="token punctuation">.</span><span class="token function">Add</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">)</span>
+	t<span class="token punctuation">.</span>tg<span class="token punctuation">.</span>liveGoroutines<span class="token punctuation">.</span><span class="token function">Add</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">)</span>
+	t<span class="token punctuation">.</span>tg<span class="token punctuation">.</span>pidns<span class="token punctuation">.</span>owner<span class="token punctuation">.</span>liveGoroutines<span class="token punctuation">.</span><span class="token function">Add</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">)</span>
+	t<span class="token punctuation">.</span>tg<span class="token punctuation">.</span>pidns<span class="token punctuation">.</span>owner<span class="token punctuation">.</span>runningGoroutines<span class="token punctuation">.</span><span class="token function">Add</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">)</span>
+	<span class="token comment">// Task is now running in system mode.</span>
+	t<span class="token punctuation">.</span><span class="token function">accountTaskGoroutineLeave</span><span class="token punctuation">(</span>TaskGoroutineNonexistent<span class="token punctuation">)</span>
+	<span class="token comment">// Use the task's TID in the root PID namespace to make it visible in stack dumps.</span>
+	<span class="token keyword">go</span> t<span class="token punctuation">.</span><span class="token function">run</span><span class="token punctuation">(</span><span class="token function">uintptr</span><span class="token punctuation">(</span>tid<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token comment">// S/R-SAFE: synchronizes with saving through stops</span>
+<span class="token punctuation">}</span>
+</code></pre> <div class="line-numbers-wrapper"><span class="line-number">1</span><br><span class="line-number">2</span><br><span class="line-number">3</span><br><span class="line-number">4</span><br><span class="line-number">5</span><br><span class="line-number">6</span><br><span class="line-number">7</span><br><span class="line-number">8</span><br><span class="line-number">9</span><br><span class="line-number">10</span><br><span class="line-number">11</span><br><span class="line-number">12</span><br><span class="line-number">13</span><br><span class="line-number">14</span><br><span class="line-number">15</span><br><span class="line-number">16</span><br></div></div><p>どうやらgoroutineで<code>Task.run(tid)</code>を起動しているようです．
+<code>Kernel</code>構造体に登録されているそれぞれの<code>Task</code>をgoroutineを使用して走らせているようですね．
+<code>Task.run()</code>をみてみます．</p> <blockquote><p>run runs the task goroutine. threadID a dummy value set to the task's TID in the root PID namespace to make it visible in stack dumps. A goroutine for a given task can be identified searching for Task.run()'s argument value.</p></blockquote> <div class="language-go line-numbers-mode"><pre class="language-go"><code><span class="token keyword">func</span> <span class="token punctuation">(</span>t <span class="token operator">*</span>Task<span class="token punctuation">)</span> <span class="token function">run</span><span class="token punctuation">(</span>threadID <span class="token builtin">uintptr</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token comment">// 省略</span>
+	<span class="token keyword">for</span> <span class="token punctuation">{</span>
+		t<span class="token punctuation">.</span><span class="token function">doStop</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+		t<span class="token punctuation">.</span>runState <span class="token operator">=</span> t<span class="token punctuation">.</span>runState<span class="token punctuation">.</span><span class="token function">execute</span><span class="token punctuation">(</span>t<span class="token punctuation">)</span>
+		<span class="token keyword">if</span> t<span class="token punctuation">.</span>runState <span class="token operator">==</span> <span class="token boolean">nil</span> <span class="token punctuation">{</span>
+			t<span class="token punctuation">.</span><span class="token function">accountTaskGoroutineEnter</span><span class="token punctuation">(</span>TaskGoroutineNonexistent<span class="token punctuation">)</span>
+			t<span class="token punctuation">.</span>goroutineStopped<span class="token punctuation">.</span><span class="token function">Done</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+			t<span class="token punctuation">.</span>tg<span class="token punctuation">.</span>liveGoroutines<span class="token punctuation">.</span><span class="token function">Done</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+			t<span class="token punctuation">.</span>tg<span class="token punctuation">.</span>pidns<span class="token punctuation">.</span>owner<span class="token punctuation">.</span>liveGoroutines<span class="token punctuation">.</span><span class="token function">Done</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+			t<span class="token punctuation">.</span>tg<span class="token punctuation">.</span>pidns<span class="token punctuation">.</span>owner<span class="token punctuation">.</span>runningGoroutines<span class="token punctuation">.</span><span class="token function">Done</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+			<span class="token comment">// Keep argument alive because stack trace for dead variables may not be correct.</span>
+			runtime<span class="token punctuation">.</span><span class="token function">KeepAlive</span><span class="token punctuation">(</span>threadID<span class="token punctuation">)</span>
+			<span class="token keyword">return</span>
+		<span class="token punctuation">}</span>
+	<span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre> <div class="line-numbers-wrapper"><span class="line-number">1</span><br><span class="line-number">2</span><br><span class="line-number">3</span><br><span class="line-number">4</span><br><span class="line-number">5</span><br><span class="line-number">6</span><br><span class="line-number">7</span><br><span class="line-number">8</span><br><span class="line-number">9</span><br><span class="line-number">10</span><br><span class="line-number">11</span><br><span class="line-number">12</span><br><span class="line-number">13</span><br><span class="line-number">14</span><br><span class="line-number">15</span><br><span class="line-number">16</span><br><span class="line-number">17</span><br><span class="line-number">18</span><br><span class="line-number">19</span><br><span class="line-number">20</span><br></div></div><p><code>t.runState = t.runState.execute(t)</code>で実際の処理を行なっていそうです．<code>execute(Task)</code>はインターフェースとして実装されており．<code>runState</code>の状態により呼び出される実装が変化するようです．今回は<code>runApp</code>型に実装されている<code>execute()</code>メソッドをみてみます．</p> <div class="language-go line-numbers-mode"><pre class="language-go"><code><span class="token keyword">func</span> <span class="token punctuation">(</span>app <span class="token operator">*</span>runApp<span class="token punctuation">)</span> <span class="token function">execute</span><span class="token punctuation">(</span>t <span class="token operator">*</span>Task<span class="token punctuation">)</span> taskRunState <span class="token punctuation">{</span>
+    <span class="token comment">// 省略</span>
+    <span class="token keyword">switch</span> err <span class="token punctuation">{</span>
+	<span class="token keyword">case</span> <span class="token boolean">nil</span><span class="token punctuation">:</span>
+		<span class="token comment">// Handle application system call.</span>
+		<span class="token keyword">return</span> t<span class="token punctuation">.</span><span class="token function">doSyscall</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+    <span class="token comment">// 省略</span>
+<span class="token punctuation">}</span>
+</code></pre> <div class="line-numbers-wrapper"><span class="line-number">1</span><br><span class="line-number">2</span><br><span class="line-number">3</span><br><span class="line-number">4</span><br><span class="line-number">5</span><br><span class="line-number">6</span><br><span class="line-number">7</span><br><span class="line-number">8</span><br></div></div><p>いろいろ処理をしていますが<code>Task.doSyscall()</code>でシステムコールをハンドリングしてそうな感じですね．</p> <blockquote><p>doSyscall is the entry point for an invocation of a system call specified by the current state of t's registers. The syscall path is very hot; avoid defer.</p></blockquote> <div class="language-go line-numbers-mode"><pre class="language-go"><code><span class="token keyword">func</span> <span class="token punctuation">(</span>t <span class="token operator">*</span>Task<span class="token punctuation">)</span> <span class="token function">doSyscall</span><span class="token punctuation">(</span><span class="token punctuation">)</span> taskRunState <span class="token punctuation">{</span>
+    sysno <span class="token operator">:=</span> t<span class="token punctuation">.</span><span class="token function">Arch</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">SyscallNo</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+    args <span class="token operator">:=</span> t<span class="token punctuation">.</span><span class="token function">Arch</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">SyscallArgs</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+    <span class="token comment">// 省略</span>
+    <span class="token comment">// Check seccomp filters. The nil check is for performance (as seccomp use</span>
+	<span class="token comment">// is rare), not needed for correctness.</span>
+	<span class="token keyword">if</span> t<span class="token punctuation">.</span>syscallFilters<span class="token punctuation">.</span><span class="token function">Load</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">!=</span> <span class="token boolean">nil</span> <span class="token punctuation">{</span>
+	    <span class="token keyword">switch</span> r <span class="token operator">:=</span> t<span class="token punctuation">.</span><span class="token function">checkSeccompSyscall</span><span class="token punctuation">(</span><span class="token function">int32</span><span class="token punctuation">(</span>sysno<span class="token punctuation">)</span><span class="token punctuation">,</span> args<span class="token punctuation">,</span> usermem<span class="token punctuation">.</span><span class="token function">Addr</span><span class="token punctuation">(</span>t<span class="token punctuation">.</span><span class="token function">Arch</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">IP</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span> r <span class="token punctuation">{</span>
+            <span class="token comment">// 省略</span>
+        <span class="token punctuation">}</span>
+    <span class="token keyword">return</span> t<span class="token punctuation">.</span><span class="token function">doSyscallEnter</span><span class="token punctuation">(</span>sysno<span class="token punctuation">,</span> args<span class="token punctuation">)</span>
+<span class="token punctuation">}</span>
+</code></pre> <div class="line-numbers-wrapper"><span class="line-number">1</span><br><span class="line-number">2</span><br><span class="line-number">3</span><br><span class="line-number">4</span><br><span class="line-number">5</span><br><span class="line-number">6</span><br><span class="line-number">7</span><br><span class="line-number">8</span><br><span class="line-number">9</span><br><span class="line-number">10</span><br><span class="line-number">11</span><br><span class="line-number">12</span><br></div></div><p><code>seccomp</code>でシステムコールをチェックしているようです．その後，<code>Task.doSyscallEnter(sysno, args)</code>でシステムコールを発行している感じです．</p> <div class="language-go line-numbers-mode"><pre class="language-go"><code><span class="token keyword">func</span> <span class="token punctuation">(</span>t <span class="token operator">*</span>Task<span class="token punctuation">)</span> <span class="token function">doSyscallEnter</span><span class="token punctuation">(</span>sysno <span class="token builtin">uintptr</span><span class="token punctuation">,</span> args arch<span class="token punctuation">.</span>SyscallArguments<span class="token punctuation">)</span> taskRunState <span class="token punctuation">{</span>
+	<span class="token keyword">if</span> next<span class="token punctuation">,</span> ok <span class="token operator">:=</span> t<span class="token punctuation">.</span><span class="token function">ptraceSyscallEnter</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span> ok <span class="token punctuation">{</span>
+		<span class="token keyword">return</span> next
+	<span class="token punctuation">}</span>
+	<span class="token keyword">return</span> t<span class="token punctuation">.</span><span class="token function">doSyscallInvoke</span><span class="token punctuation">(</span>sysno<span class="token punctuation">,</span> args<span class="token punctuation">)</span>
+<span class="token punctuation">}</span>
+</code></pre> <div class="line-numbers-wrapper"><span class="line-number">1</span><br><span class="line-number">2</span><br><span class="line-number">3</span><br><span class="line-number">4</span><br><span class="line-number">5</span><br><span class="line-number">6</span><br></div></div><p><code>ptraceSyscallEnter()</code>で発行されるシステムコールがptraceでストップされるべきかチェックした後<code>Task.doSyscallInvoke(sysno, args)</code>を呼び出しています．このメソッドでは<code>Task.executeSyscall(sysno, args)</code>を呼び出してシステムコールを発行するようです．このメソッドを覗いてみます．</p> <div class="language-go line-numbers-mode"><pre class="language-go"><code><span class="token keyword">func</span> <span class="token punctuation">(</span>t <span class="token operator">*</span>Task<span class="token punctuation">)</span> <span class="token function">executeSyscall</span><span class="token punctuation">(</span>sysno <span class="token builtin">uintptr</span><span class="token punctuation">,</span> args arch<span class="token punctuation">.</span>SyscallArguments<span class="token punctuation">)</span> <span class="token punctuation">(</span>rval <span class="token builtin">uintptr</span><span class="token punctuation">,</span> ctrl <span class="token operator">*</span>SyscallControl<span class="token punctuation">,</span> err <span class="token builtin">error</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+	s <span class="token operator">:=</span> t<span class="token punctuation">.</span><span class="token function">SyscallTable</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+	<span class="token comment">// 省略</span>
+	<span class="token keyword">if</span> bits<span class="token punctuation">.</span><span class="token function">IsOn32</span><span class="token punctuation">(</span>fe<span class="token punctuation">,</span> ExternalBeforeEnable<span class="token punctuation">)</span> <span class="token operator">&amp;&amp;</span> <span class="token punctuation">(</span>s<span class="token punctuation">.</span>ExternalFilterBefore <span class="token operator">==</span> <span class="token boolean">nil</span> <span class="token operator">||</span> s<span class="token punctuation">.</span><span class="token function">ExternalFilterBefore</span><span class="token punctuation">(</span>t<span class="token punctuation">,</span> sysno<span class="token punctuation">,</span> args<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+		t<span class="token punctuation">.</span><span class="token function">invokeExternal</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+		<span class="token comment">// Ensure we check for stops, then invoke the syscall again.</span>
+		ctrl <span class="token operator">=</span> ctrlStopAndReinvokeSyscall
+	<span class="token punctuation">}</span> <span class="token keyword">else</span> <span class="token punctuation">{</span>
+		fn <span class="token operator">:=</span> s<span class="token punctuation">.</span><span class="token function">Lookup</span><span class="token punctuation">(</span>sysno<span class="token punctuation">)</span>
+		<span class="token comment">// 省略</span>
+		<span class="token keyword">if</span> fn <span class="token operator">!=</span> <span class="token boolean">nil</span> <span class="token punctuation">{</span>
+			<span class="token comment">// Call our syscall implementation.</span>
+			rval<span class="token punctuation">,</span> ctrl<span class="token punctuation">,</span> err <span class="token operator">=</span> <span class="token function">fn</span><span class="token punctuation">(</span>t<span class="token punctuation">,</span> args<span class="token punctuation">)</span>
+		<span class="token punctuation">}</span> <span class="token keyword">else</span> <span class="token punctuation">{</span>
+			<span class="token comment">// Use the missing function if not found.</span>
+			rval<span class="token punctuation">,</span> err <span class="token operator">=</span> t<span class="token punctuation">.</span><span class="token function">SyscallTable</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">Missing</span><span class="token punctuation">(</span>t<span class="token punctuation">,</span> sysno<span class="token punctuation">,</span> args<span class="token punctuation">)</span>
+		<span class="token punctuation">}</span>
+		<span class="token comment">// 省略</span>
+	<span class="token keyword">return</span>
+<span class="token punctuation">}</span>
+</code></pre> <div class="line-numbers-wrapper"><span class="line-number">1</span><br><span class="line-number">2</span><br><span class="line-number">3</span><br><span class="line-number">4</span><br><span class="line-number">5</span><br><span class="line-number">6</span><br><span class="line-number">7</span><br><span class="line-number">8</span><br><span class="line-number">9</span><br><span class="line-number">10</span><br><span class="line-number">11</span><br><span class="line-number">12</span><br><span class="line-number">13</span><br><span class="line-number">14</span><br><span class="line-number">15</span><br><span class="line-number">16</span><br><span class="line-number">17</span><br><span class="line-number">18</span><br><span class="line-number">19</span><br><span class="line-number">20</span><br><span class="line-number">21</span><br></div></div><p>ざっと重要な部分を抜き出しました．最初にシステムコールテーブルを作成してます．その後，テーブルを走査してシステムコールの実体を呼び出しています．(<code>Lookup()</code>の部分)</p> <div class="language-go line-numbers-mode"><pre class="language-go"><code>rval<span class="token punctuation">,</span> ctrl<span class="token punctuation">,</span> err <span class="token operator">=</span> <span class="token function">fn</span><span class="token punctuation">(</span>t<span class="token punctuation">,</span> args<span class="token punctuation">)</span>
+</code></pre> <div class="line-numbers-wrapper"><span class="line-number">1</span><br></div></div><p>ここでシステムコールを発行しています．</p> <p>一通りシステムコールが発行されるまでの流れを追ってみました．大体は追えたかなと思います．というわけで次はユーザー空間システムコールについてみてみます．</p> <p>先ほどの<code>Lookup()</code>から辿ってみます．</p> <div class="language-go line-numbers-mode"><pre class="language-go"><code><span class="token comment">// Lookup returns the syscall implementation, if one exists.</span>
+<span class="token keyword">func</span> <span class="token punctuation">(</span>s <span class="token operator">*</span>SyscallTable<span class="token punctuation">)</span> <span class="token function">Lookup</span><span class="token punctuation">(</span>sysno <span class="token builtin">uintptr</span><span class="token punctuation">)</span> SyscallFn <span class="token punctuation">{</span>
+	<span class="token keyword">if</span> sysno <span class="token operator">&lt;</span> <span class="token function">uintptr</span><span class="token punctuation">(</span><span class="token function">len</span><span class="token punctuation">(</span>s<span class="token punctuation">.</span>lookup<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+		<span class="token keyword">return</span> s<span class="token punctuation">.</span>lookup<span class="token punctuation">[</span>sysno<span class="token punctuation">]</span>
+	<span class="token punctuation">}</span>
+	<span class="token keyword">return</span> <span class="token boolean">nil</span>
+<span class="token punctuation">}</span>
+</code></pre> <div class="line-numbers-wrapper"><span class="line-number">1</span><br><span class="line-number">2</span><br><span class="line-number">3</span><br><span class="line-number">4</span><br><span class="line-number">5</span><br><span class="line-number">6</span><br><span class="line-number">7</span><br><span class="line-number">8</span><br></div></div><p><code>SyscallTable</code>型の定義をみてみます．</p> <blockquote><p>SyscallTable is a lookup table of system calls. Critically, a SyscallTable is <em>immutable</em>. In order to make supporting suspend and resume sane, they must be uniquely registered and may not change during operation. +stateify savable</p></blockquote> <div class="language-go line-numbers-mode"><pre class="language-go"><code><span class="token keyword">type</span> SyscallTable <span class="token keyword">struct</span> <span class="token punctuation">{</span>
+    <span class="token comment">// 省略</span>
+    <span class="token comment">// Table is the collection of functions.</span>
+    Table <span class="token keyword">map</span><span class="token punctuation">[</span><span class="token builtin">uintptr</span><span class="token punctuation">]</span>Syscall <span class="token string">`state:&quot;manual&quot;`</span>
+    <span class="token comment">// lookup is a fixed-size array that holds the syscalls (indexed by</span>
+    <span class="token comment">// their numbers). It is used for fast look ups.</span>
+    lookup <span class="token punctuation">[</span><span class="token punctuation">]</span>SyscallFn <span class="token string">`state:&quot;manual&quot;`</span>
+    <span class="token comment">// 省略</span>
+<span class="token punctuation">}</span>
+</code></pre> <div class="line-numbers-wrapper"><span class="line-number">1</span><br><span class="line-number">2</span><br><span class="line-number">3</span><br><span class="line-number">4</span><br><span class="line-number">5</span><br><span class="line-number">6</span><br><span class="line-number">7</span><br><span class="line-number">8</span><br><span class="line-number">9</span><br><span class="line-number">10</span><br><span class="line-number">11</span><br><span class="line-number">12</span><br></div></div><p><code>lookup</code>フィールドが<code>SyscallFn</code>型のスライスを保持しています．
+システムコール関数の登録は<code>RegisterSyscallTable()</code>関数で行われます．</p> <div class="language-go line-numbers-mode"><pre class="language-go"><code><span class="token comment">// RegisterSyscallTable registers a new syscall table for use by a Kernel.</span>
+<span class="token keyword">func</span> <span class="token function">RegisterSyscallTable</span><span class="token punctuation">(</span>s <span class="token operator">*</span>SyscallTable<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token comment">// Initialize the fast-lookup table.</span>
+	<span class="token keyword">for</span> num<span class="token punctuation">,</span> sc <span class="token operator">:=</span> <span class="token keyword">range</span> s<span class="token punctuation">.</span>Table <span class="token punctuation">{</span>
+		s<span class="token punctuation">.</span>lookup<span class="token punctuation">[</span>num<span class="token punctuation">]</span> <span class="token operator">=</span> sc<span class="token punctuation">.</span>Fn
+	<span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre> <div class="line-numbers-wrapper"><span class="line-number">1</span><br><span class="line-number">2</span><br><span class="line-number">3</span><br><span class="line-number">4</span><br><span class="line-number">5</span><br><span class="line-number">6</span><br><span class="line-number">7</span><br></div></div><p><code>Table</code>フィールドにより<code>SyscallTable</code>型がNewされる時に初期化されているようです．<code>Table</code>フィールドは<code>map[uintptr]Syscall</code>型なので実際に呼び出される<code>SyscallFn</code>型をマッピングし直しているようです．
+<code>Syscall</code>型はこちら</p> <div class="language-go line-numbers-mode"><pre class="language-go"><code><span class="token comment">// Syscall includes the syscall implementation and compatibility information.</span>
+<span class="token keyword">type</span> Syscall <span class="token keyword">struct</span> <span class="token punctuation">{</span>
+	<span class="token comment">// Name is the syscall name.</span>
+	Name <span class="token builtin">string</span>
+	<span class="token comment">// Fn is the implementation of the syscall.</span>
+	Fn SyscallFn
+	<span class="token comment">// SupportLevel is the level of support implemented in gVisor.</span>
+	SupportLevel SyscallSupportLevel
+	<span class="token comment">// Note describes the compatibility of the syscall.</span>
+	Note <span class="token builtin">string</span>
+	<span class="token comment">// URLs is set of URLs to any relevant bugs or issues.</span>
+	URLs <span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token builtin">string</span>
+<span class="token punctuation">}</span>
+</code></pre> <div class="line-numbers-wrapper"><span class="line-number">1</span><br><span class="line-number">2</span><br><span class="line-number">3</span><br><span class="line-number">4</span><br><span class="line-number">5</span><br><span class="line-number">6</span><br><span class="line-number">7</span><br><span class="line-number">8</span><br><span class="line-number">9</span><br><span class="line-number">10</span><br><span class="line-number">11</span><br><span class="line-number">12</span><br><span class="line-number">13</span><br></div></div><p><code>Fn</code>に<code>SyscallFn</code>型を持ってますね．
+続いて<code>SyscallFn</code>型をみてみます．</p> <div class="language-go line-numbers-mode"><pre class="language-go"><code><span class="token comment">// SyscallFn is a syscall implementation.</span>
+<span class="token keyword">type</span> SyscallFn <span class="token keyword">func</span><span class="token punctuation">(</span>t <span class="token operator">*</span>Task<span class="token punctuation">,</span> args arch<span class="token punctuation">.</span>SyscallArguments<span class="token punctuation">)</span> <span class="token punctuation">(</span><span class="token builtin">uintptr</span><span class="token punctuation">,</span> <span class="token operator">*</span>SyscallControl<span class="token punctuation">,</span> <span class="token builtin">error</span><span class="token punctuation">)</span>
+</code></pre> <div class="line-numbers-wrapper"><span class="line-number">1</span><br><span class="line-number">2</span><br></div></div><p>名前のごとくシステムコール関数の型ですね．
+次はこれらのシステムコール関数の実装を探します．
+<code>RegisterSyscallTable(s *SyscallTable)</code>が呼び出される場所を辿ると，<code>runsc/boot/loader_amd64.go</code>, <code>runsc/boot/loader_arm64.go</code>の初期化関数から呼び出されているようです．実装はどちらも同じなので紹介します．(AMDの方)</p> <div class="language-go line-numbers-mode"><pre class="language-go"><code><span class="token keyword">func</span> <span class="token function">init</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+	<span class="token comment">// Register the global syscall table.</span>
+	kernel<span class="token punctuation">.</span><span class="token function">RegisterSyscallTable</span><span class="token punctuation">(</span>linux<span class="token punctuation">.</span>AMD64<span class="token punctuation">)</span>
+<span class="token punctuation">}</span>
+</code></pre> <div class="line-numbers-wrapper"><span class="line-number">1</span><br><span class="line-number">2</span><br><span class="line-number">3</span><br><span class="line-number">4</span><br></div></div><p>引数として与えられている構造体をみてみましょう．</p> <blockquote><p>AMD64 is a table of Linux amd64 syscall API with the corresponding syscall numbers from Linux 4.4.</p></blockquote> <div class="language-go line-numbers-mode"><pre class="language-go"><code><span class="token keyword">var</span> AMD64 <span class="token operator">=</span> <span class="token operator">&amp;</span>kernel<span class="token punctuation">.</span>SyscallTable<span class="token punctuation">{</span>
+	OS<span class="token punctuation">:</span>   abi<span class="token punctuation">.</span>Linux<span class="token punctuation">,</span>
+	Arch<span class="token punctuation">:</span> arch<span class="token punctuation">.</span>AMD64<span class="token punctuation">,</span>
+	Version<span class="token punctuation">:</span> kernel<span class="token punctuation">.</span>Version<span class="token punctuation">{</span>
+		<span class="token comment">// Version 4.4 is chosen as a stable, longterm version of Linux, which</span>
+		<span class="token comment">// guides the interface provided by this syscall table. The build</span>
+		<span class="token comment">// version is that for a clean build with default kernel config, at 5</span>
+		<span class="token comment">// minutes after v4.4 was tagged.</span>
+		Sysname<span class="token punctuation">:</span> LinuxSysname<span class="token punctuation">,</span>
+		Release<span class="token punctuation">:</span> LinuxRelease<span class="token punctuation">,</span>
+		Version<span class="token punctuation">:</span> LinuxVersion<span class="token punctuation">,</span>
+	<span class="token punctuation">}</span><span class="token punctuation">,</span>
+	AuditNumber<span class="token punctuation">:</span> linux<span class="token punctuation">.</span>AUDIT_ARCH_X86_64<span class="token punctuation">,</span>
+	Table<span class="token punctuation">:</span> <span class="token keyword">map</span><span class="token punctuation">[</span><span class="token builtin">uintptr</span><span class="token punctuation">]</span>kernel<span class="token punctuation">.</span>Syscall<span class="token punctuation">{</span>
+		<span class="token number">0</span><span class="token punctuation">:</span>   syscalls<span class="token punctuation">.</span><span class="token function">Supported</span><span class="token punctuation">(</span><span class="token string">&quot;read&quot;</span><span class="token punctuation">,</span> Read<span class="token punctuation">)</span><span class="token punctuation">,</span>
+		<span class="token number">1</span><span class="token punctuation">:</span>   syscalls<span class="token punctuation">.</span><span class="token function">Supported</span><span class="token punctuation">(</span><span class="token string">&quot;write&quot;</span><span class="token punctuation">,</span> Write<span class="token punctuation">)</span><span class="token punctuation">,</span>
+		<span class="token number">2</span><span class="token punctuation">:</span>   syscalls<span class="token punctuation">.</span><span class="token function">PartiallySupported</span><span class="token punctuation">(</span><span class="token string">&quot;open&quot;</span><span class="token punctuation">,</span> Open<span class="token punctuation">,</span> <span class="token string">&quot;Options O_DIRECT, O_NOATIME, O_PATH, O_TMPFILE, O_SYNC are not supported.&quot;</span><span class="token punctuation">,</span> <span class="token boolean">nil</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+		<span class="token number">3</span><span class="token punctuation">:</span>   syscalls<span class="token punctuation">.</span><span class="token function">Supported</span><span class="token punctuation">(</span><span class="token string">&quot;close&quot;</span><span class="token punctuation">,</span> Close<span class="token punctuation">)</span><span class="token punctuation">,</span>
+		<span class="token number">4</span><span class="token punctuation">:</span>   syscalls<span class="token punctuation">.</span><span class="token function">Supported</span><span class="token punctuation">(</span><span class="token string">&quot;stat&quot;</span><span class="token punctuation">,</span> Stat<span class="token punctuation">)</span><span class="token punctuation">,</span>
+		<span class="token number">5</span><span class="token punctuation">:</span>   syscalls<span class="token punctuation">.</span><span class="token function">Supported</span><span class="token punctuation">(</span><span class="token string">&quot;fstat&quot;</span><span class="token punctuation">,</span> Fstat<span class="token punctuation">)</span><span class="token punctuation">,</span>
+		<span class="token number">6</span><span class="token punctuation">:</span>   syscalls<span class="token punctuation">.</span><span class="token function">Supported</span><span class="token punctuation">(</span><span class="token string">&quot;lstat&quot;</span><span class="token punctuation">,</span> Lstat<span class="token punctuation">)</span><span class="token punctuation">,</span>
+		<span class="token number">7</span><span class="token punctuation">:</span>   syscalls<span class="token punctuation">.</span><span class="token function">Supported</span><span class="token punctuation">(</span><span class="token string">&quot;poll&quot;</span><span class="token punctuation">,</span> Poll<span class="token punctuation">)</span><span class="token punctuation">,</span>
+		<span class="token number">8</span><span class="token punctuation">:</span>   syscalls<span class="token punctuation">.</span><span class="token function">Supported</span><span class="token punctuation">(</span><span class="token string">&quot;lseek&quot;</span><span class="token punctuation">,</span> Lseek<span class="token punctuation">)</span><span class="token punctuation">,</span>
+		<span class="token number">9</span><span class="token punctuation">:</span>   syscalls<span class="token punctuation">.</span><span class="token function">PartiallySupported</span><span class="token punctuation">(</span><span class="token string">&quot;mmap&quot;</span><span class="token punctuation">,</span> Mmap<span class="token punctuation">,</span> <span class="token string">&quot;Generally supported with exceptions. Options MAP_FIXED_NOREPLACE, MAP_SHARED_VALIDATE, MAP_SYNC MAP_GROWSDOWN, MAP_HUGETLB are not supported.&quot;</span><span class="token punctuation">,</span> <span class="token boolean">nil</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+		<span class="token number">10</span><span class="token punctuation">:</span>  syscalls<span class="token punctuation">.</span><span class="token function">Supported</span><span class="token punctuation">(</span><span class="token string">&quot;mprotect&quot;</span><span class="token punctuation">,</span> Mprotect<span class="token punctuation">)</span><span class="token punctuation">,</span>
+		<span class="token number">11</span><span class="token punctuation">:</span>  syscalls<span class="token punctuation">.</span><span class="token function">Supported</span><span class="token punctuation">(</span><span class="token string">&quot;munmap&quot;</span><span class="token punctuation">,</span> Munmap<span class="token punctuation">)</span><span class="token punctuation">,</span>
+		<span class="token number">12</span><span class="token punctuation">:</span>  syscalls<span class="token punctuation">.</span><span class="token function">Supported</span><span class="token punctuation">(</span><span class="token string">&quot;brk&quot;</span><span class="token punctuation">,</span> Brk<span class="token punctuation">)</span><span class="token punctuation">,</span>
+		<span class="token number">13</span><span class="token punctuation">:</span>  syscalls<span class="token punctuation">.</span><span class="token function">Supported</span><span class="token punctuation">(</span><span class="token string">&quot;rt_sigaction&quot;</span><span class="token punctuation">,</span> RtSigaction<span class="token punctuation">)</span><span class="token punctuation">,</span>
+		<span class="token number">14</span><span class="token punctuation">:</span>  syscalls<span class="token punctuation">.</span><span class="token function">Supported</span><span class="token punctuation">(</span><span class="token string">&quot;rt_sigprocmask&quot;</span><span class="token punctuation">,</span> RtSigprocmask<span class="token punctuation">)</span><span class="token punctuation">,</span>
+		<span class="token number">15</span><span class="token punctuation">:</span>  syscalls<span class="token punctuation">.</span><span class="token function">Supported</span><span class="token punctuation">(</span><span class="token string">&quot;rt_sigreturn&quot;</span><span class="token punctuation">,</span> RtSigreturn<span class="token punctuation">)</span><span class="token punctuation">,</span>
+        <span class="token number">16</span><span class="token punctuation">:</span>  syscalls<span class="token punctuation">.</span><span class="token function">PartiallySupported</span><span class="token punctuation">(</span><span class="token string">&quot;ioctl&quot;</span><span class="token punctuation">,</span> Ioctl<span class="token punctuation">,</span> <span class="token string">&quot;Only a few ioctls are implemented for backing devices and file systems.&quot;</span><span class="token punctuation">,</span> <span class="token boolean">nil</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+        <span class="token comment">// 省略</span>
+<span class="token punctuation">}</span>    
+</code></pre> <div class="line-numbers-wrapper"><span class="line-number">1</span><br><span class="line-number">2</span><br><span class="line-number">3</span><br><span class="line-number">4</span><br><span class="line-number">5</span><br><span class="line-number">6</span><br><span class="line-number">7</span><br><span class="line-number">8</span><br><span class="line-number">9</span><br><span class="line-number">10</span><br><span class="line-number">11</span><br><span class="line-number">12</span><br><span class="line-number">13</span><br><span class="line-number">14</span><br><span class="line-number">15</span><br><span class="line-number">16</span><br><span class="line-number">17</span><br><span class="line-number">18</span><br><span class="line-number">19</span><br><span class="line-number">20</span><br><span class="line-number">21</span><br><span class="line-number">22</span><br><span class="line-number">23</span><br><span class="line-number">24</span><br><span class="line-number">25</span><br><span class="line-number">26</span><br><span class="line-number">27</span><br><span class="line-number">28</span><br><span class="line-number">29</span><br><span class="line-number">30</span><br><span class="line-number">31</span><br><span class="line-number">32</span><br><span class="line-number">33</span><br></div></div><p><code>syscalls.Supported()</code>の第二引数に与えられているのがシステムコール関数の実装です．
+各システムコールの実装は辿るのが大変なのでまたの機会に．
+どのようにSentryとGoferが動いているのかやユーザー空間カーネルについて少しは理解できたかなと思います．</p> <h2 id="まとめ"><a href="#まとめ" class="header-anchor">#</a> まとめ</h2> <p>今回はGoogle製の安全なコンテナランタイムであるgVisorを覗いてみました．コンテナプロセスが立ち上がるところから見始めてユーザー空間に実装されたgVisorのシステムコールが実行されるまでを辿ってみました．まだまだわからない部分も多く，飛ばした箇所も多かったので今後もっと詳しくみてみたいです．モチベとしては自作コンテナランタイムとかの足掛かりになればと思っていましたが，そこらへんをみるなら普通にruncとかをみた方がいいかもなと思いました．これはこれで面白かったです．gVisorは現在はLinuxのみのサポートで，ネットワーク周りのオーバーヘッドが大きいということなのでMac OSがサポートされたりパフォーマンスが向上したら実際に使ってみたいなと考えています．</p></div></article> <section class="post-meta main-div" data-v-4e23451f><section class="post-date clearfix" data-v-4e23451f><span class="create-date" data-v-4e23451f>
+      Created : 2020-04-14
+    </span> <!----></section> <section class="post-links" data-v-4e23451f><a href="/posts/2020/04/01/arp.html" class="post-link" data-v-4e23451f>
+      Previous Post : ネットワークを作って理解しようとする(ARP編)
+    </a> <!----></section></section> <div id="post-comments" class="main-div"><!----></div></div></main> <aside class="aside" data-v-4dd605a1><div class="info-card main-div" data-v-9d847660 data-v-4dd605a1><div class="info-card-header" style="background-size:cover;background-repeat:no-repeat;background-position:center;background-attachment:scroll;background-image:url(/img/bg.jpg);" data-v-9d847660><img src="/img/avatar.jpg" alt="terassyi" class="info-avatar" data-v-9d847660></div> <div class="info-card-body" data-v-9d847660><section class="info-nickname" data-v-9d847660>
+      terassyi
+    </section> <section class="info-desc" data-v-9d847660>Fortune favors the brave</section> <section class="info-contact" data-v-9d847660><section data-v-9d847660><span title="Fukuoka City, Japan" data-v-9d847660 data-v-9d847660><svg class="icon" style="font-size:1em;" data-v-9d847660 data-v-9d847660><title data-v-9d847660 data-v-9d847660>Fukuoka City, Japan</title><use xlink:href="#icon-location" data-v-9d847660 data-v-9d847660></use></svg><span class="info-text" data-v-9d847660 data-v-9d847660>
+          Fukuoka City, Japan
+        </span></span></section> <section data-v-9d847660><span title="Kyushu University" data-v-9d847660 data-v-9d847660><svg class="icon" style="font-size:1em;" data-v-9d847660 data-v-9d847660><title data-v-9d847660 data-v-9d847660>Kyushu University</title><use xlink:href="#icon-organization" data-v-9d847660 data-v-9d847660></use></svg><span class="info-text" data-v-9d847660 data-v-9d847660>
+          Kyushu University
+        </span></span></section> <section data-v-9d847660><a href="mailto:iscale821@gmail.com" title="iscale821@gmail.com" data-v-9d847660 data-v-9d847660><svg class="icon" style="font-size:1em;" data-v-9d847660 data-v-9d847660><title data-v-9d847660 data-v-9d847660>iscale821@gmail.com</title><use xlink:href="#icon-email" data-v-9d847660 data-v-9d847660></use></svg><span class="info-text" data-v-9d847660 data-v-9d847660>
+          iscale821@gmail.com
+        </span></a></section></section></div> <div class="info-card-footer" data-v-9d847660><section class="info-sns clearfix" data-v-9d847660><a href="https://github.com/terassyi" target="_blank" class="sns-link" data-v-9d847660><span title="GitHub: terassyi" class="sns-icon" data-v-9d847660 data-v-9d847660><svg class="icon" style="font-size:1.5em;" data-v-9d847660 data-v-9d847660><title data-v-9d847660 data-v-9d847660>GitHub: terassyi</title><use xlink:href="#icon-github" data-v-9d847660 data-v-9d847660></use></svg></span></a><a href="https://twitter.com/terassyi_" target="_blank" class="sns-link" data-v-9d847660><span title="Twitter: terassyi" class="sns-icon" data-v-9d847660 data-v-9d847660><svg class="icon" style="font-size:1.5em;" data-v-9d847660 data-v-9d847660><title data-v-9d847660 data-v-9d847660>Twitter: terassyi</title><use xlink:href="#icon-twitter" data-v-9d847660 data-v-9d847660></use></svg></span></a></section></div></div> <div class="post-nav-card main-div" style="position:relative;top:0;width:0px;" data-v-4dd605a1><div class="post-nav-contents"><svg class="icon"><title>book</title><use xlink:href="#icon-book"></use></svg> <span>Table of Contents</span> <div class="post-nav-toc"><ul><li><a href="/posts/2020/04/14/gvisor.html#documentを意訳">Documentを意訳</a></li><li><a href="/posts/2020/04/14/gvisor.html#architecture-guide">Architecture Guide</a><ul><li><a href="/posts/2020/04/14/gvisor.html#how-is-this-different">How is this different?</a></li><li><a href="/posts/2020/04/14/gvisor.html#why-go">Why Go?</a></li></ul></li><li><a href="/posts/2020/04/14/gvisor.html#overview-platforms">Overview &amp; Platforms</a><ul><li><a href="/posts/2020/04/14/gvisor.html#runsc">runsc</a></li><li><a href="/posts/2020/04/14/gvisor.html#sentry">Sentry</a></li><li><a href="/posts/2020/04/14/gvisor.html#platforms">Platforms</a></li><li><a href="/posts/2020/04/14/gvisor.html#gofer">Gofer</a></li><li><a href="/posts/2020/04/14/gvisor.html#application">Application</a></li></ul></li><li><a href="/posts/2020/04/14/gvisor.html#gvisorを使ってみる">gVisorを使ってみる</a></li><li><a href="/posts/2020/04/14/gvisor.html#gvisorのソースコードを読む">gVisorのソースコードを読む</a><ul><li><a href="/posts/2020/04/14/gvisor.html#ディレクトリ構成">ディレクトリ構成</a></li><li><a href="/posts/2020/04/14/gvisor.html#runsc-2">runsc</a></li><li><a href="/posts/2020/04/14/gvisor.html#pkg">pkg</a></li><li><a href="/posts/2020/04/14/gvisor.html#sentry-2">sentry</a></li></ul></li><li><a href="/posts/2020/04/14/gvisor.html#まとめ">まとめ</a></li></ul></div></div> <div class="post-nav-comments"><svg class="icon"><title>comment</title><use xlink:href="#icon-comment"></use></svg> <a href="/posts/2020/04/14/gvisor.html#post-comments">
+      Comments
+    </a></div></div></aside></div> <footer class="footer" data-v-1375e54c><p class="footer-sns-links" data-v-1375e54c><a href="https://github.com/terassyi" target="_blank" class="sns-link" data-v-1375e54c><span title="GitHub: terassyi" class="sns-icon" data-v-1375e54c data-v-1375e54c><svg class="icon" style="font-size:25px;" data-v-1375e54c data-v-1375e54c><title data-v-1375e54c data-v-1375e54c>GitHub: terassyi</title><use xlink:href="#icon-github" data-v-1375e54c data-v-1375e54c></use></svg></span></a><a href="https://twitter.com/terassyi_" target="_blank" class="sns-link" data-v-1375e54c><span title="Twitter: terassyi" class="sns-icon" data-v-1375e54c data-v-1375e54c><svg class="icon" style="font-size:25px;" data-v-1375e54c data-v-1375e54c><title data-v-1375e54c data-v-1375e54c>Twitter: terassyi</title><use xlink:href="#icon-twitter" data-v-1375e54c data-v-1375e54c></use></svg></span></a></p> <p class="footer-text" data-v-1375e54c><span data-v-1375e54c>Powered by </span> <a href="https://github.com/vuejs/vuepress" target="_blank" data-v-1375e54c>
+      VuePress
+    </a> <span data-v-1375e54c> | </span> <a href="https://github.com/meteorlxy/vuepress-theme-meteorlxy" target="_blank" data-v-1375e54c>
+        meteorlxy
+      </a></p> <p class="footer-text" data-v-1375e54c>Copyright 2018-present <a href="https://github.com/meteorlxy" target="_blank">meteorlxy</a> | MIT License</p></footer></div><div class="global-ui"><!----><!----></div></div>
+    <script src="/assets/js/app.641ef63b.js" defer></script><script src="/assets/js/7.77a4036e.js" defer></script><script src="/assets/js/17.60d57c7c.js" defer></script>
+  </body>
+</html>
