@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en-US">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>runcを使ってみる | terassyi</title>
+    <meta name="description" content="コンテナランタイムのデファクトスタンダードであるruncについて調査します．">
+    <meta name="generator" content="VuePress 1.4.0">
+    <meta property="article:published_time" content="2020-04-29T00:00:00.000Z"><meta property="article:modified_time" content="2020-04-29T11:37:22.000Z"><meta property="og:site_name" content="terassyi"><meta property="og:title" content="runcを使ってみる"><meta property="og:description" content="コンテナランタイムのデファクトスタンダードであるruncについて調査します．"><meta property="og:type" content="website"><meta property="og:url" content="/posts/2020/04/29/runc.html"><meta name="twitter:title" content="runcを使ってみる"><meta name="twitter:description" content="コンテナランタイムのデファクトスタンダードであるruncについて調査します．"><meta name="twitter:url" content="/posts/2020/04/29/runc.html"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:label2" content="Filed under"><meta name="twitter:data2" content="container, runc, OCI-runtime, golang"><meta property="article:tag" content="container"><meta property="article:tag" content="runc"><meta property="article:tag" content="OCI-runtime"><meta property="article:tag" content="golang">
+    <link rel="preload" href="/assets/css/0.styles.59c2fb62.css" as="style"><link rel="preload" href="/assets/js/app.ef6e9dc3.js" as="script"><link rel="preload" href="/assets/js/7.77a4036e.js" as="script"><link rel="preload" href="/assets/js/19.f60145b2.js" as="script"><link rel="prefetch" href="/assets/js/1.40aaebb3.js"><link rel="prefetch" href="/assets/js/10.0230b77f.js"><link rel="prefetch" href="/assets/js/11.bf271c2b.js"><link rel="prefetch" href="/assets/js/12.0e6a0537.js"><link rel="prefetch" href="/assets/js/13.8c3e4266.js"><link rel="prefetch" href="/assets/js/14.f73a6702.js"><link rel="prefetch" href="/assets/js/15.7907120f.js"><link rel="prefetch" href="/assets/js/16.ed1a4504.js"><link rel="prefetch" href="/assets/js/17.60d57c7c.js"><link rel="prefetch" href="/assets/js/18.cedfb250.js"><link rel="prefetch" href="/assets/js/20.ad1c95a9.js"><link rel="prefetch" href="/assets/js/21.760873ed.js"><link rel="prefetch" href="/assets/js/22.b3ee9b40.js"><link rel="prefetch" href="/assets/js/23.5a7c2668.js"><link rel="prefetch" href="/assets/js/24.c407a17f.js"><link rel="prefetch" href="/assets/js/25.60133765.js"><link rel="prefetch" href="/assets/js/3.fa4a4c2b.js"><link rel="prefetch" href="/assets/js/4.61b18747.js"><link rel="prefetch" href="/assets/js/5.fb685733.js"><link rel="prefetch" href="/assets/js/6.9e4fc271.js"><link rel="prefetch" href="/assets/js/8.eb9dc6e5.js"><link rel="prefetch" href="/assets/js/9.7a7e842c.js">
+    <link rel="stylesheet" href="/assets/css/0.styles.59c2fb62.css">
+  </head>
+  <body>
+    <div id="app" data-server-rendered="true"><div id="vuepress-theme-meteorlxy"><header class="header" style="background-size:cover;background-repeat:no-repeat;background-position:center;background-attachment:scroll;background-image:url(/img/bg.jpg);" data-v-7a046aea><div data-v-e4145d0a data-v-7a046aea><nav class="navbar" data-v-e4145d0a><div class="container" data-v-e4145d0a><a href="/" class="router-link-active" data-v-e4145d0a><span class="navbar-site-name" data-v-e4145d0a>
+          terassyi
+        </span></a> <div class="navbar-toggler" data-v-e4145d0a><svg class="icon" style="font-size:1.2em;" data-v-e4145d0a data-v-e4145d0a><title data-v-e4145d0a data-v-e4145d0a>menu</title><use xlink:href="#icon-menu" data-v-e4145d0a data-v-e4145d0a></use></svg></div> <div class="navbar-links" data-v-e4145d0a><a href="/" class="navbar-link" data-v-e4145d0a>
+            Home
+          </a><a href="/posts/" class="navbar-link router-link-active" data-v-e4145d0a>
+            Posts
+          </a><a href="/about/" class="navbar-link" data-v-e4145d0a>
+            About
+          </a></div></div></nav> <div class="navbar-holder" style="display:none;" data-v-e4145d0a></div></div> <div class="banner" data-v-98d6aa8c data-v-7a046aea data-v-7a046aea><div class="container" data-v-98d6aa8c><div class="center" data-v-98d6aa8c><h1 data-v-98d6aa8c data-v-7a046aea>
+          runcを使ってみる
+        </h1></div></div></div></header> <div class="container clearfix show-aside" data-v-4dd605a1 data-v-4dd605a1><main class="main" data-v-4dd605a1><div class="post" data-v-4dd605a1 data-v-4dd605a1><section class="post-meta main-div" data-v-4e23451f><section class="post-date clearfix" data-v-4e23451f><span class="create-date" data-v-4e23451f>
+      Created : 2020-04-29
+    </span> <span class="update-date" data-v-4e23451f>
+      Updated : 2020-04-29
+    </span></section> <section class="post-links" data-v-4e23451f><a href="/posts/2020/04/14/gvisor.html" class="post-link" data-v-4e23451f>
+      Previous Post : セキュアなコンテナgVisor
+    </a> <!----></section></section> <article class="main-div"><div class="post-content content content__default"><p>こんにちは．前回のポストからだいぶ時間が空きましたが，相変わらず緊急事態宣言中で自宅待機なので時間を持て余しています．
+ONE PIECEを読み返していたんですが，無料で読める分を読み終わってしまったので暇です．
+今回はdockerに使用されているコンテナランタイムである<code>runc</code>を使ってみました．
+では，いきます．</p> <h2 id="runcとは"><a href="#runcとは" class="header-anchor">#</a> runcとは</h2> <p><code>runc</code>とは，dockerなどのバックエンドで使用されるコンテナランタイムの一つで，dockerのデフォルトのランタイムです．
+コンテナプロセスの作成やリソースの制限を実行します．
+実装はgolangです．</p> <h2 id="使ってみる"><a href="#使ってみる" class="header-anchor">#</a> 使ってみる</h2> <p>早速使ってみましょう．実験環境にはVagrantで作成したubuntuを使用します．
+dockerが動く環境であればruncは入っているはずなのでインストールなどは省略します．</p> <h3 id="概要"><a href="#概要" class="header-anchor">#</a> 概要</h3> <blockquote><p>runc - Open Container Initiative runtime
+runc is a command line client for running applications packaged according to
+the Open Container Initiative (OCI) format and is a compliant implementation of the
+Open Container Initiative specification.</p></blockquote> <blockquote><p>runc integrates well with existing process supervisors to provide a production
+container runtime environment for applications. It can be used with your
+existing process monitoring tools and the container will be spawned as a
+direct child of the process supervisor.</p></blockquote> <blockquote><p>Containers are configured using bundles. A bundle for a container is a directory
+that includes a specification file named &quot;config.json&quot; and a root filesystem.
+The root filesystem contains the contents of the container.</p></blockquote> <blockquote><p>To start a new instance of a container:
+# runc run [ -b bundle ] <container-id></container-id></p></blockquote> <blockquote><p>Where &quot;<container-id>&quot; is your name for the instance of the container that you
+are starting. The name you provide for the container instance must be unique on
+your host. Providing the bundle directory using &quot;-b&quot; is optional. The default
+value for &quot;bundle&quot; is the current directory.</container-id></p></blockquote> <p>使用しそうなコマンドは以下の通り</p> <ul><li>create</li> <li>delete</li> <li>exec</li> <li>kill</li> <li>ps</li> <li>run</li> <li>spec</li> <li>start</li></ul> <p>では早速使ってみましょう．</p> <h3 id="rootfsの準備"><a href="#rootfsの準備" class="header-anchor">#</a> rootfsの準備</h3> <p>runcでは，dockerと違い作成するコンテナのファイルなどを用意してくれません．そこをいい感じにやってくれているのがdockerということですね．
+というわけで自分で用意します．</p> <div class="language- line-numbers-mode"><pre class="language-text"><code>$ mkdir runc-test
+$ cd runc-test
+</code></pre> <div class="line-numbers-wrapper"><span class="line-number">1</span><br><span class="line-number">2</span><br></div></div><p><code>rootfs</code>ディレクトリを作成します．</p> <div class="language- line-numbers-mode"><pre class="language-text"><code>$ mkdir rootfs
+</code></pre> <div class="line-numbers-wrapper"><span class="line-number">1</span><br></div></div><p>今回は作成するコンテナのファイルたちをdockerを経由してエクスポートしてきます．
+そのために，一旦dockerでコンテナを起動します．今回はcentosイメージを使用しました．(なんでもいいです)</p> <div class="language- line-numbers-mode"><pre class="language-text"><code>$ sudo docker run -it centos /bin/sh
+</code></pre> <div class="line-numbers-wrapper"><span class="line-number">1</span><br></div></div><p>別ターミナルで</p> <div class="language- line-numbers-mode"><pre class="language-text"><code>$ sudo docker ps
+CONTAINER ID        IMAGE               COMMAND             CREATED             STATUS              PORTS               NAMES
+bc36fee690d6        centos              &quot;/bin/sh&quot;           6 seconds ago       Up 5 seconds                            suspicious_keller
+</code></pre> <div class="line-numbers-wrapper"><span class="line-number">1</span><br><span class="line-number">2</span><br><span class="line-number">3</span><br></div></div><p><code>NAMES</code>を記録して，以下コマンドを実行してcentosのファイルシステムをtarファイルにexportします．</p> <div class="language- line-numbers-mode"><pre class="language-text"><code>$ sudo docker export suspicious_keller &gt; runc-test-centos.tar
+</code></pre> <div class="line-numbers-wrapper"><span class="line-number">1</span><br></div></div><p>すると，<code>runc-test-centos.tar</code>なるファイルが作成されるので展開しましょう．</p> <div class="language- line-numbers-mode"><pre class="language-text"><code>$ tar -xvf runc-test-centos.tar
+$ rm runc-test-centos.tar
+</code></pre> <div class="line-numbers-wrapper"><span class="line-number">1</span><br><span class="line-number">2</span><br></div></div><p>とするとcentosのファイルシステムがカントディレクトリ(/runc-test/rootfs)に展開されます.</p> <div class="language- line-numbers-mode"><pre class="language-text"><code>$ ls
+bin  dev  etc  home  lib  lib64  lost+found  media  mnt  opt  proc  root  run  sbin  srv  sys  tmp  usr  var
+</code></pre> <div class="line-numbers-wrapper"><span class="line-number">1</span><br><span class="line-number">2</span><br></div></div><p>これでrootfsの準備が完了しました．</p> <h3 id="config-jsonの準備"><a href="#config-jsonの準備" class="header-anchor">#</a> config.jsonの準備</h3> <p>コンテナは<code>config.json</code>から設定を読み込んで起動されます．ですので，<code>config.json</code>を準備しましょう．
+<code>config.json</code>は<code>runc spec</code>コマンドで生成されます．</p> <div class="language- line-numbers-mode"><pre class="language-text"><code>$ cd ..
+$ sudo runc spec
+</code></pre> <div class="line-numbers-wrapper"><span class="line-number">1</span><br><span class="line-number">2</span><br></div></div><p>生成された<code>config.json</code>をみてみましょう．</p> <div class="language-json line-numbers-mode"><pre class="language-json"><code><span class="token punctuation">{</span>
+	<span class="token property">&quot;ociVersion&quot;</span><span class="token operator">:</span> <span class="token string">&quot;1.0.1-dev&quot;</span><span class="token punctuation">,</span>
+	<span class="token property">&quot;process&quot;</span><span class="token operator">:</span> <span class="token punctuation">{</span>
+		<span class="token property">&quot;terminal&quot;</span><span class="token operator">:</span> <span class="token boolean">true</span><span class="token punctuation">,</span>
+		<span class="token property">&quot;user&quot;</span><span class="token operator">:</span> <span class="token punctuation">{</span>
+			<span class="token property">&quot;uid&quot;</span><span class="token operator">:</span> <span class="token number">0</span><span class="token punctuation">,</span>
+			<span class="token property">&quot;gid&quot;</span><span class="token operator">:</span> <span class="token number">0</span>
+		<span class="token punctuation">}</span><span class="token punctuation">,</span>
+		<span class="token property">&quot;args&quot;</span><span class="token operator">:</span> <span class="token punctuation">[</span>
+			<span class="token string">&quot;sh&quot;</span>
+		<span class="token punctuation">]</span><span class="token punctuation">,</span>
+		<span class="token property">&quot;env&quot;</span><span class="token operator">:</span> <span class="token punctuation">[</span>
+			<span class="token string">&quot;PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin&quot;</span><span class="token punctuation">,</span>
+			<span class="token string">&quot;TERM=xterm&quot;</span>
+		<span class="token punctuation">]</span><span class="token punctuation">,</span>
+		<span class="token property">&quot;cwd&quot;</span><span class="token operator">:</span> <span class="token string">&quot;/&quot;</span><span class="token punctuation">,</span>
+		<span class="token property">&quot;capabilities&quot;</span><span class="token operator">:</span> <span class="token punctuation">{</span>
+			<span class="token property">&quot;bounding&quot;</span><span class="token operator">:</span> <span class="token punctuation">[</span>
+				<span class="token string">&quot;CAP_AUDIT_WRITE&quot;</span><span class="token punctuation">,</span>
+				<span class="token string">&quot;CAP_KILL&quot;</span><span class="token punctuation">,</span>
+				<span class="token string">&quot;CAP_NET_BIND_SERVICE&quot;</span>
+			<span class="token punctuation">]</span><span class="token punctuation">,</span>
+			<span class="token property">&quot;effective&quot;</span><span class="token operator">:</span> <span class="token punctuation">[</span>
+				<span class="token string">&quot;CAP_AUDIT_WRITE&quot;</span><span class="token punctuation">,</span>
+				<span class="token string">&quot;CAP_KILL&quot;</span><span class="token punctuation">,</span>
+				<span class="token string">&quot;CAP_NET_BIND_SERVICE&quot;</span>
+			<span class="token punctuation">]</span><span class="token punctuation">,</span>
+			<span class="token property">&quot;inheritable&quot;</span><span class="token operator">:</span> <span class="token punctuation">[</span>
+				<span class="token string">&quot;CAP_AUDIT_WRITE&quot;</span><span class="token punctuation">,</span>
+				<span class="token string">&quot;CAP_KILL&quot;</span><span class="token punctuation">,</span>
+				<span class="token string">&quot;CAP_NET_BIND_SERVICE&quot;</span>
+			<span class="token punctuation">]</span><span class="token punctuation">,</span>
+			<span class="token property">&quot;permitted&quot;</span><span class="token operator">:</span> <span class="token punctuation">[</span>
+				<span class="token string">&quot;CAP_AUDIT_WRITE&quot;</span><span class="token punctuation">,</span>
+				<span class="token string">&quot;CAP_KILL&quot;</span><span class="token punctuation">,</span>
+				<span class="token string">&quot;CAP_NET_BIND_SERVICE&quot;</span>
+			<span class="token punctuation">]</span><span class="token punctuation">,</span>
+			<span class="token property">&quot;ambient&quot;</span><span class="token operator">:</span> <span class="token punctuation">[</span>
+				<span class="token string">&quot;CAP_AUDIT_WRITE&quot;</span><span class="token punctuation">,</span>
+				<span class="token string">&quot;CAP_KILL&quot;</span><span class="token punctuation">,</span>
+				<span class="token string">&quot;CAP_NET_BIND_SERVICE&quot;</span>
+			<span class="token punctuation">]</span>
+		<span class="token punctuation">}</span><span class="token punctuation">,</span>
+		<span class="token property">&quot;rlimits&quot;</span><span class="token operator">:</span> <span class="token punctuation">[</span>
+			<span class="token punctuation">{</span>
+				<span class="token property">&quot;type&quot;</span><span class="token operator">:</span> <span class="token string">&quot;RLIMIT_NOFILE&quot;</span><span class="token punctuation">,</span>
+				<span class="token property">&quot;hard&quot;</span><span class="token operator">:</span> <span class="token number">1024</span><span class="token punctuation">,</span>
+				<span class="token property">&quot;soft&quot;</span><span class="token operator">:</span> <span class="token number">1024</span>
+			<span class="token punctuation">}</span>
+		<span class="token punctuation">]</span><span class="token punctuation">,</span>
+		<span class="token property">&quot;noNewPrivileges&quot;</span><span class="token operator">:</span> <span class="token boolean">true</span>
+	<span class="token punctuation">}</span><span class="token punctuation">,</span>
+	<span class="token property">&quot;root&quot;</span><span class="token operator">:</span> <span class="token punctuation">{</span>
+		<span class="token property">&quot;path&quot;</span><span class="token operator">:</span> <span class="token string">&quot;rootfs&quot;</span><span class="token punctuation">,</span>
+		<span class="token property">&quot;readonly&quot;</span><span class="token operator">:</span> <span class="token boolean">true</span>
+	<span class="token punctuation">}</span><span class="token punctuation">,</span>
+	<span class="token property">&quot;hostname&quot;</span><span class="token operator">:</span> <span class="token string">&quot;runc&quot;</span><span class="token punctuation">,</span>
+	<span class="token property">&quot;mounts&quot;</span><span class="token operator">:</span> <span class="token punctuation">[</span>
+		<span class="token punctuation">{</span>
+			<span class="token property">&quot;destination&quot;</span><span class="token operator">:</span> <span class="token string">&quot;/proc&quot;</span><span class="token punctuation">,</span>
+			<span class="token property">&quot;type&quot;</span><span class="token operator">:</span> <span class="token string">&quot;proc&quot;</span><span class="token punctuation">,</span>
+			<span class="token property">&quot;source&quot;</span><span class="token operator">:</span> <span class="token string">&quot;proc&quot;</span>
+		<span class="token punctuation">}</span><span class="token punctuation">,</span>
+		<span class="token punctuation">{</span>
+			<span class="token property">&quot;destination&quot;</span><span class="token operator">:</span> <span class="token string">&quot;/dev&quot;</span><span class="token punctuation">,</span>
+			<span class="token property">&quot;type&quot;</span><span class="token operator">:</span> <span class="token string">&quot;tmpfs&quot;</span><span class="token punctuation">,</span>
+			<span class="token property">&quot;source&quot;</span><span class="token operator">:</span> <span class="token string">&quot;tmpfs&quot;</span><span class="token punctuation">,</span>
+			<span class="token property">&quot;options&quot;</span><span class="token operator">:</span> <span class="token punctuation">[</span>
+				<span class="token string">&quot;nosuid&quot;</span><span class="token punctuation">,</span>
+				<span class="token string">&quot;strictatime&quot;</span><span class="token punctuation">,</span>
+				<span class="token string">&quot;mode=755&quot;</span><span class="token punctuation">,</span>
+				<span class="token string">&quot;size=65536k&quot;</span>
+			<span class="token punctuation">]</span>
+		<span class="token punctuation">}</span><span class="token punctuation">,</span>
+		<span class="token punctuation">{</span>
+			<span class="token property">&quot;destination&quot;</span><span class="token operator">:</span> <span class="token string">&quot;/dev/pts&quot;</span><span class="token punctuation">,</span>
+			<span class="token property">&quot;type&quot;</span><span class="token operator">:</span> <span class="token string">&quot;devpts&quot;</span><span class="token punctuation">,</span>
+			<span class="token property">&quot;source&quot;</span><span class="token operator">:</span> <span class="token string">&quot;devpts&quot;</span><span class="token punctuation">,</span>
+			<span class="token property">&quot;options&quot;</span><span class="token operator">:</span> <span class="token punctuation">[</span>
+				<span class="token string">&quot;nosuid&quot;</span><span class="token punctuation">,</span>
+				<span class="token string">&quot;noexec&quot;</span><span class="token punctuation">,</span>
+				<span class="token string">&quot;newinstance&quot;</span><span class="token punctuation">,</span>
+				<span class="token string">&quot;ptmxmode=0666&quot;</span><span class="token punctuation">,</span>
+				<span class="token string">&quot;mode=0620&quot;</span><span class="token punctuation">,</span>
+				<span class="token string">&quot;gid=5&quot;</span>
+			<span class="token punctuation">]</span>
+		<span class="token punctuation">}</span><span class="token punctuation">,</span>
+		<span class="token punctuation">{</span>
+			<span class="token property">&quot;destination&quot;</span><span class="token operator">:</span> <span class="token string">&quot;/dev/shm&quot;</span><span class="token punctuation">,</span>
+			<span class="token property">&quot;type&quot;</span><span class="token operator">:</span> <span class="token string">&quot;tmpfs&quot;</span><span class="token punctuation">,</span>
+			<span class="token property">&quot;source&quot;</span><span class="token operator">:</span> <span class="token string">&quot;shm&quot;</span><span class="token punctuation">,</span>
+			<span class="token property">&quot;options&quot;</span><span class="token operator">:</span> <span class="token punctuation">[</span>
+				<span class="token string">&quot;nosuid&quot;</span><span class="token punctuation">,</span>
+				<span class="token string">&quot;noexec&quot;</span><span class="token punctuation">,</span>
+				<span class="token string">&quot;nodev&quot;</span><span class="token punctuation">,</span>
+				<span class="token string">&quot;mode=1777&quot;</span><span class="token punctuation">,</span>
+				<span class="token string">&quot;size=65536k&quot;</span>
+			<span class="token punctuation">]</span>
+		<span class="token punctuation">}</span><span class="token punctuation">,</span>
+		<span class="token punctuation">{</span>
+			<span class="token property">&quot;destination&quot;</span><span class="token operator">:</span> <span class="token string">&quot;/dev/mqueue&quot;</span><span class="token punctuation">,</span>
+			<span class="token property">&quot;type&quot;</span><span class="token operator">:</span> <span class="token string">&quot;mqueue&quot;</span><span class="token punctuation">,</span>
+			<span class="token property">&quot;source&quot;</span><span class="token operator">:</span> <span class="token string">&quot;mqueue&quot;</span><span class="token punctuation">,</span>
+			<span class="token property">&quot;options&quot;</span><span class="token operator">:</span> <span class="token punctuation">[</span>
+				<span class="token string">&quot;nosuid&quot;</span><span class="token punctuation">,</span>
+				<span class="token string">&quot;noexec&quot;</span><span class="token punctuation">,</span>
+				<span class="token string">&quot;nodev&quot;</span>
+			<span class="token punctuation">]</span>
+		<span class="token punctuation">}</span><span class="token punctuation">,</span>
+		<span class="token punctuation">{</span>
+			<span class="token property">&quot;destination&quot;</span><span class="token operator">:</span> <span class="token string">&quot;/sys&quot;</span><span class="token punctuation">,</span>
+			<span class="token property">&quot;type&quot;</span><span class="token operator">:</span> <span class="token string">&quot;sysfs&quot;</span><span class="token punctuation">,</span>
+			<span class="token property">&quot;source&quot;</span><span class="token operator">:</span> <span class="token string">&quot;sysfs&quot;</span><span class="token punctuation">,</span>
+			<span class="token property">&quot;options&quot;</span><span class="token operator">:</span> <span class="token punctuation">[</span>
+				<span class="token string">&quot;nosuid&quot;</span><span class="token punctuation">,</span>
+				<span class="token string">&quot;noexec&quot;</span><span class="token punctuation">,</span>
+				<span class="token string">&quot;nodev&quot;</span><span class="token punctuation">,</span>
+				<span class="token string">&quot;ro&quot;</span>
+			<span class="token punctuation">]</span>
+		<span class="token punctuation">}</span><span class="token punctuation">,</span>
+		<span class="token punctuation">{</span>
+			<span class="token property">&quot;destination&quot;</span><span class="token operator">:</span> <span class="token string">&quot;/sys/fs/cgroup&quot;</span><span class="token punctuation">,</span>
+			<span class="token property">&quot;type&quot;</span><span class="token operator">:</span> <span class="token string">&quot;cgroup&quot;</span><span class="token punctuation">,</span>
+			<span class="token property">&quot;source&quot;</span><span class="token operator">:</span> <span class="token string">&quot;cgroup&quot;</span><span class="token punctuation">,</span>
+			<span class="token property">&quot;options&quot;</span><span class="token operator">:</span> <span class="token punctuation">[</span>
+				<span class="token string">&quot;nosuid&quot;</span><span class="token punctuation">,</span>
+				<span class="token string">&quot;noexec&quot;</span><span class="token punctuation">,</span>
+				<span class="token string">&quot;nodev&quot;</span><span class="token punctuation">,</span>
+				<span class="token string">&quot;relatime&quot;</span><span class="token punctuation">,</span>
+				<span class="token string">&quot;ro&quot;</span>
+			<span class="token punctuation">]</span>
+		<span class="token punctuation">}</span>
+	<span class="token punctuation">]</span><span class="token punctuation">,</span>
+	<span class="token property">&quot;linux&quot;</span><span class="token operator">:</span> <span class="token punctuation">{</span>
+		<span class="token property">&quot;resources&quot;</span><span class="token operator">:</span> <span class="token punctuation">{</span>
+			<span class="token property">&quot;devices&quot;</span><span class="token operator">:</span> <span class="token punctuation">[</span>
+				<span class="token punctuation">{</span>
+					<span class="token property">&quot;allow&quot;</span><span class="token operator">:</span> <span class="token boolean">false</span><span class="token punctuation">,</span>
+					<span class="token property">&quot;access&quot;</span><span class="token operator">:</span> <span class="token string">&quot;rwm&quot;</span>
+				<span class="token punctuation">}</span>
+			<span class="token punctuation">]</span>
+		<span class="token punctuation">}</span><span class="token punctuation">,</span>
+		<span class="token property">&quot;namespaces&quot;</span><span class="token operator">:</span> <span class="token punctuation">[</span>
+			<span class="token punctuation">{</span>
+				<span class="token property">&quot;type&quot;</span><span class="token operator">:</span> <span class="token string">&quot;pid&quot;</span>
+			<span class="token punctuation">}</span><span class="token punctuation">,</span>
+			<span class="token punctuation">{</span>
+				<span class="token property">&quot;type&quot;</span><span class="token operator">:</span> <span class="token string">&quot;network&quot;</span>
+			<span class="token punctuation">}</span><span class="token punctuation">,</span>
+			<span class="token punctuation">{</span>
+				<span class="token property">&quot;type&quot;</span><span class="token operator">:</span> <span class="token string">&quot;ipc&quot;</span>
+			<span class="token punctuation">}</span><span class="token punctuation">,</span>
+			<span class="token punctuation">{</span>
+				<span class="token property">&quot;type&quot;</span><span class="token operator">:</span> <span class="token string">&quot;uts&quot;</span>
+			<span class="token punctuation">}</span><span class="token punctuation">,</span>
+			<span class="token punctuation">{</span>
+				<span class="token property">&quot;type&quot;</span><span class="token operator">:</span> <span class="token string">&quot;mount&quot;</span>
+			<span class="token punctuation">}</span>
+		<span class="token punctuation">]</span><span class="token punctuation">,</span>
+		<span class="token property">&quot;maskedPaths&quot;</span><span class="token operator">:</span> <span class="token punctuation">[</span>
+			<span class="token string">&quot;/proc/kcore&quot;</span><span class="token punctuation">,</span>
+			<span class="token string">&quot;/proc/latency_stats&quot;</span><span class="token punctuation">,</span>
+			<span class="token string">&quot;/proc/timer_list&quot;</span><span class="token punctuation">,</span>
+			<span class="token string">&quot;/proc/timer_stats&quot;</span><span class="token punctuation">,</span>
+			<span class="token string">&quot;/proc/sched_debug&quot;</span><span class="token punctuation">,</span>
+			<span class="token string">&quot;/sys/firmware&quot;</span><span class="token punctuation">,</span>
+			<span class="token string">&quot;/proc/scsi&quot;</span>
+		<span class="token punctuation">]</span><span class="token punctuation">,</span>
+		<span class="token property">&quot;readonlyPaths&quot;</span><span class="token operator">:</span> <span class="token punctuation">[</span>
+			<span class="token string">&quot;/proc/asound&quot;</span><span class="token punctuation">,</span>
+			<span class="token string">&quot;/proc/bus&quot;</span><span class="token punctuation">,</span>
+			<span class="token string">&quot;/proc/fs&quot;</span><span class="token punctuation">,</span>
+			<span class="token string">&quot;/proc/irq&quot;</span><span class="token punctuation">,</span>
+			<span class="token string">&quot;/proc/sys&quot;</span><span class="token punctuation">,</span>
+			<span class="token string">&quot;/proc/sysrq-trigger&quot;</span>
+		<span class="token punctuation">]</span>
+	<span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre> <div class="line-numbers-wrapper"><span class="line-number">1</span><br><span class="line-number">2</span><br><span class="line-number">3</span><br><span class="line-number">4</span><br><span class="line-number">5</span><br><span class="line-number">6</span><br><span class="line-number">7</span><br><span class="line-number">8</span><br><span class="line-number">9</span><br><span class="line-number">10</span><br><span class="line-number">11</span><br><span class="line-number">12</span><br><span class="line-number">13</span><br><span class="line-number">14</span><br><span class="line-number">15</span><br><span class="line-number">16</span><br><span class="line-number">17</span><br><span class="line-number">18</span><br><span class="line-number">19</span><br><span class="line-number">20</span><br><span class="line-number">21</span><br><span class="line-number">22</span><br><span class="line-number">23</span><br><span class="line-number">24</span><br><span class="line-number">25</span><br><span class="line-number">26</span><br><span class="line-number">27</span><br><span class="line-number">28</span><br><span class="line-number">29</span><br><span class="line-number">30</span><br><span class="line-number">31</span><br><span class="line-number">32</span><br><span class="line-number">33</span><br><span class="line-number">34</span><br><span class="line-number">35</span><br><span class="line-number">36</span><br><span class="line-number">37</span><br><span class="line-number">38</span><br><span class="line-number">39</span><br><span class="line-number">40</span><br><span class="line-number">41</span><br><span class="line-number">42</span><br><span class="line-number">43</span><br><span class="line-number">44</span><br><span class="line-number">45</span><br><span class="line-number">46</span><br><span class="line-number">47</span><br><span class="line-number">48</span><br><span class="line-number">49</span><br><span class="line-number">50</span><br><span class="line-number">51</span><br><span class="line-number">52</span><br><span class="line-number">53</span><br><span class="line-number">54</span><br><span class="line-number">55</span><br><span class="line-number">56</span><br><span class="line-number">57</span><br><span class="line-number">58</span><br><span class="line-number">59</span><br><span class="line-number">60</span><br><span class="line-number">61</span><br><span class="line-number">62</span><br><span class="line-number">63</span><br><span class="line-number">64</span><br><span class="line-number">65</span><br><span class="line-number">66</span><br><span class="line-number">67</span><br><span class="line-number">68</span><br><span class="line-number">69</span><br><span class="line-number">70</span><br><span class="line-number">71</span><br><span class="line-number">72</span><br><span class="line-number">73</span><br><span class="line-number">74</span><br><span class="line-number">75</span><br><span class="line-number">76</span><br><span class="line-number">77</span><br><span class="line-number">78</span><br><span class="line-number">79</span><br><span class="line-number">80</span><br><span class="line-number">81</span><br><span class="line-number">82</span><br><span class="line-number">83</span><br><span class="line-number">84</span><br><span class="line-number">85</span><br><span class="line-number">86</span><br><span class="line-number">87</span><br><span class="line-number">88</span><br><span class="line-number">89</span><br><span class="line-number">90</span><br><span class="line-number">91</span><br><span class="line-number">92</span><br><span class="line-number">93</span><br><span class="line-number">94</span><br><span class="line-number">95</span><br><span class="line-number">96</span><br><span class="line-number">97</span><br><span class="line-number">98</span><br><span class="line-number">99</span><br><span class="line-number">100</span><br><span class="line-number">101</span><br><span class="line-number">102</span><br><span class="line-number">103</span><br><span class="line-number">104</span><br><span class="line-number">105</span><br><span class="line-number">106</span><br><span class="line-number">107</span><br><span class="line-number">108</span><br><span class="line-number">109</span><br><span class="line-number">110</span><br><span class="line-number">111</span><br><span class="line-number">112</span><br><span class="line-number">113</span><br><span class="line-number">114</span><br><span class="line-number">115</span><br><span class="line-number">116</span><br><span class="line-number">117</span><br><span class="line-number">118</span><br><span class="line-number">119</span><br><span class="line-number">120</span><br><span class="line-number">121</span><br><span class="line-number">122</span><br><span class="line-number">123</span><br><span class="line-number">124</span><br><span class="line-number">125</span><br><span class="line-number">126</span><br><span class="line-number">127</span><br><span class="line-number">128</span><br><span class="line-number">129</span><br><span class="line-number">130</span><br><span class="line-number">131</span><br><span class="line-number">132</span><br><span class="line-number">133</span><br><span class="line-number">134</span><br><span class="line-number">135</span><br><span class="line-number">136</span><br><span class="line-number">137</span><br><span class="line-number">138</span><br><span class="line-number">139</span><br><span class="line-number">140</span><br><span class="line-number">141</span><br><span class="line-number">142</span><br><span class="line-number">143</span><br><span class="line-number">144</span><br><span class="line-number">145</span><br><span class="line-number">146</span><br><span class="line-number">147</span><br><span class="line-number">148</span><br><span class="line-number">149</span><br><span class="line-number">150</span><br><span class="line-number">151</span><br><span class="line-number">152</span><br><span class="line-number">153</span><br><span class="line-number">154</span><br><span class="line-number">155</span><br><span class="line-number">156</span><br><span class="line-number">157</span><br><span class="line-number">158</span><br><span class="line-number">159</span><br><span class="line-number">160</span><br><span class="line-number">161</span><br><span class="line-number">162</span><br><span class="line-number">163</span><br><span class="line-number">164</span><br><span class="line-number">165</span><br><span class="line-number">166</span><br><span class="line-number">167</span><br><span class="line-number">168</span><br><span class="line-number">169</span><br><span class="line-number">170</span><br><span class="line-number">171</span><br><span class="line-number">172</span><br><span class="line-number">173</span><br><span class="line-number">174</span><br><span class="line-number">175</span><br><span class="line-number">176</span><br><span class="line-number">177</span><br><span class="line-number">178</span><br></div></div><p><code>capabilities</code>や<code>namespaces</code>などいろいろ設定されています．</p> <blockquote><p>process -&gt; args</p></blockquote> <p>に起動コマンドとして<code>sh</code>が登録されているのでコンテナプロセスが<code>sh</code>を実行して起動するようです．</p> <h3 id="コンテナの起動"><a href="#コンテナの起動" class="header-anchor">#</a> コンテナの起動</h3> <p>それではコンテナプロセスを起動してみます．
+コンテナを起動するには<code>runc run [container-id]</code>です．</p> <div class="language- line-numbers-mode"><pre class="language-text"><code>$ sudo runc run runc-test-centos
+sh-4.4#
+</code></pre> <div class="line-numbers-wrapper"><span class="line-number">1</span><br><span class="line-number">2</span><br></div></div><p>シェルが立ち上がり，無事起動できているようです．
+これでruncでコンテナを起動することができました．</p> <h3 id="その他のコマンドを使ってみる"><a href="#その他のコマンドを使ってみる" class="header-anchor">#</a> その他のコマンドを使ってみる</h3> <p>この調子で他のコマンドを使用してみます．</p> <h4 id="create"><a href="#create" class="header-anchor">#</a> create</h4> <p><code>create</code>はコンテナを作成サブコマンドです．</p> <div class="language- line-numbers-mode"><pre class="language-text"><code>$ sudo runc create runc-test-centos2
+cannot allocate tty if runc will detach without setting console socket
+</code></pre> <div class="line-numbers-wrapper"><span class="line-number">1</span><br><span class="line-number">2</span><br></div></div><p>単純に実行するとエラーになりました．
+デタッチするときに<code>console-socket</code>を設定してないと<code>tty</code>を割り当てることができないと言われているので，とりあえず<code>config.json</code>の<code>process&gt;terminal</code>を<code>false</code>に更新して再度実行すると作成できました．</p> <h4 id="list"><a href="#list" class="header-anchor">#</a> list</h4> <p><code>list</code>で作成されたコンテナを確認することができます．</p> <div class="language- line-numbers-mode"><pre class="language-text"><code>$ sudo runc list
+ID                  PID         STATUS      BUNDLE                    CREATED                          OWNER
+runc-test-centos2   3609        created     /home/vagrant/runc-test   2020-04-29T09:35:09.882689575Z   root
+</code></pre> <div class="line-numbers-wrapper"><span class="line-number">1</span><br><span class="line-number">2</span><br><span class="line-number">3</span><br></div></div><p>無事作成できているようです．</p> <h3 id="ps"><a href="#ps" class="header-anchor">#</a> ps</h3> <p><code>ps</code>で指定したコンテナの状態をみることができます．
+先ほど作成した<code>runc-test-centos2</code>の状態をみてみましょう．</p> <div class="language-$ sudo runc ps runc-test-centos2 line-numbers-mode"><pre class="language-text"><code>UID        PID  PPID  C STIME TTY          TIME CMD
+root      3609     1  0 09:35 ?        00:00:00 runc init
+</code></pre> <div class="line-numbers-wrapper"><span class="line-number">1</span><br><span class="line-number">2</span><br></div></div><p>このコンテナはまだスタートしていないので<code>CMD</code>の項目が<code>runc init</code>となっていますね．</p> <h3 id="start"><a href="#start" class="header-anchor">#</a> start</h3> <p>では，先ほど作成したコンテナを起動してみましょう．
+<code>start</code>でコンテナを起動します．</p> <div class="language- line-numbers-mode"><pre class="language-text"><code>$ sudo runc start runc-test-centos2
+sh: cannot set terminal process group (-1): Inappropriate ioctl for device
+sh: no job control in this shell
+sh-4.4# vagrant@ubuntu-xenial:~/runc-test$
+</code></pre> <div class="line-numbers-wrapper"><span class="line-number">1</span><br><span class="line-number">2</span><br><span class="line-number">3</span><br><span class="line-number">4</span><br></div></div><p>起動しているようですが，シェルのエラーが出ています．
+これはおそらく<code>create</code>するときに<code>terminal: false</code>にしたからですね．別の方法がありそうです．
+とりあえず起動はできたのでよしとします．(怠慢)</p> <h3 id="delete"><a href="#delete" class="header-anchor">#</a> delete</h3> <p><code>delete</code>で作成したコンテナを削除します．</p> <div class="language- line-numbers-mode"><pre class="language-text"><code>$ sudo runc delete runc-test-centos2
+</code></pre> <div class="line-numbers-wrapper"><span class="line-number">1</span><br></div></div><p>何も出てこなければ正常に削除できています．</p> <h2 id="まとめ"><a href="#まとめ" class="header-anchor">#</a> まとめ</h2> <p>今回はコンテナランタイムのデファクトスタンダードである<code>runc</code>について一通り使用してみました．dockerでも使用されているのでdockerでコンテナを使用する際に内部でどんなことをしているのかが少し理解できました．</p> <h2 id="参考"><a href="#参考" class="header-anchor">#</a> 参考</h2> <ul><li><a href="https://fstn.hateblo.jp/entry/2015/08/01/231302" target="_blank" rel="noopener noreferrer">runCをひと通り使ってみた<svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" x="0px" y="0px" viewBox="0 0 100 100" width="15" height="15" class="icon outbound"><path fill="currentColor" d="M18.8,85.1h56l0,0c2.2,0,4-1.8,4-4v-32h-8v28h-48v-48h28v-8h-32l0,0c-2.2,0-4,1.8-4,4v56C14.8,83.3,16.6,85.1,18.8,85.1z"></path> <polygon fill="currentColor" points="45.7,48.7 51.3,54.3 77.2,28.5 77.2,37.2 85.2,37.2 85.2,14.9 62.8,14.9 62.8,22.9 71.5,22.9"></polygon></svg></a></li> <li><a href="https://github.com/opencontainers/runc" target="_blank" rel="noopener noreferrer">github<svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" x="0px" y="0px" viewBox="0 0 100 100" width="15" height="15" class="icon outbound"><path fill="currentColor" d="M18.8,85.1h56l0,0c2.2,0,4-1.8,4-4v-32h-8v28h-48v-48h28v-8h-32l0,0c-2.2,0-4,1.8-4,4v56C14.8,83.3,16.6,85.1,18.8,85.1z"></path> <polygon fill="currentColor" points="45.7,48.7 51.3,54.3 77.2,28.5 77.2,37.2 85.2,37.2 85.2,14.9 62.8,14.9 62.8,22.9 71.5,22.9"></polygon></svg></a></li> <li><a href="https://github.com/opencontainers/runc/tree/master/man" target="_blank" rel="noopener noreferrer">runc man<svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" x="0px" y="0px" viewBox="0 0 100 100" width="15" height="15" class="icon outbound"><path fill="currentColor" d="M18.8,85.1h56l0,0c2.2,0,4-1.8,4-4v-32h-8v28h-48v-48h28v-8h-32l0,0c-2.2,0-4,1.8-4,4v56C14.8,83.3,16.6,85.1,18.8,85.1z"></path> <polygon fill="currentColor" points="45.7,48.7 51.3,54.3 77.2,28.5 77.2,37.2 85.2,37.2 85.2,14.9 62.8,14.9 62.8,22.9 71.5,22.9"></polygon></svg></a></li></ul></div></article> <section class="post-meta main-div" data-v-4e23451f><section class="post-date clearfix" data-v-4e23451f><span class="create-date" data-v-4e23451f>
+      Created : 2020-04-29
+    </span> <span class="update-date" data-v-4e23451f>
+      Updated : 2020-04-29
+    </span></section> <section class="post-links" data-v-4e23451f><a href="/posts/2020/04/14/gvisor.html" class="post-link" data-v-4e23451f>
+      Previous Post : セキュアなコンテナgVisor
+    </a> <!----></section></section> <div id="post-comments" class="main-div"><!----></div></div></main> <aside class="aside" data-v-4dd605a1><div class="info-card main-div" data-v-9d847660 data-v-4dd605a1><div class="info-card-header" style="background-size:cover;background-repeat:no-repeat;background-position:center;background-attachment:scroll;background-image:url(/img/bg.jpg);" data-v-9d847660><img src="/img/avatar.jpg" alt="terassyi" class="info-avatar" data-v-9d847660></div> <div class="info-card-body" data-v-9d847660><section class="info-nickname" data-v-9d847660>
+      terassyi
+    </section> <section class="info-desc" data-v-9d847660>Fortune favors the brave</section> <section class="info-contact" data-v-9d847660><section data-v-9d847660><span title="Fukuoka City, Japan" data-v-9d847660 data-v-9d847660><svg class="icon" style="font-size:1em;" data-v-9d847660 data-v-9d847660><title data-v-9d847660 data-v-9d847660>Fukuoka City, Japan</title><use xlink:href="#icon-location" data-v-9d847660 data-v-9d847660></use></svg><span class="info-text" data-v-9d847660 data-v-9d847660>
+          Fukuoka City, Japan
+        </span></span></section> <section data-v-9d847660><span title="Kyushu University" data-v-9d847660 data-v-9d847660><svg class="icon" style="font-size:1em;" data-v-9d847660 data-v-9d847660><title data-v-9d847660 data-v-9d847660>Kyushu University</title><use xlink:href="#icon-organization" data-v-9d847660 data-v-9d847660></use></svg><span class="info-text" data-v-9d847660 data-v-9d847660>
+          Kyushu University
+        </span></span></section> <section data-v-9d847660><a href="mailto:iscale821@gmail.com" title="iscale821@gmail.com" data-v-9d847660 data-v-9d847660><svg class="icon" style="font-size:1em;" data-v-9d847660 data-v-9d847660><title data-v-9d847660 data-v-9d847660>iscale821@gmail.com</title><use xlink:href="#icon-email" data-v-9d847660 data-v-9d847660></use></svg><span class="info-text" data-v-9d847660 data-v-9d847660>
+          iscale821@gmail.com
+        </span></a></section></section></div> <div class="info-card-footer" data-v-9d847660><section class="info-sns clearfix" data-v-9d847660><a href="https://github.com/terassyi" target="_blank" class="sns-link" data-v-9d847660><span title="GitHub: terassyi" class="sns-icon" data-v-9d847660 data-v-9d847660><svg class="icon" style="font-size:1.5em;" data-v-9d847660 data-v-9d847660><title data-v-9d847660 data-v-9d847660>GitHub: terassyi</title><use xlink:href="#icon-github" data-v-9d847660 data-v-9d847660></use></svg></span></a><a href="https://twitter.com/terassyi_" target="_blank" class="sns-link" data-v-9d847660><span title="Twitter: terassyi" class="sns-icon" data-v-9d847660 data-v-9d847660><svg class="icon" style="font-size:1.5em;" data-v-9d847660 data-v-9d847660><title data-v-9d847660 data-v-9d847660>Twitter: terassyi</title><use xlink:href="#icon-twitter" data-v-9d847660 data-v-9d847660></use></svg></span></a></section></div></div> <div class="post-nav-card main-div" style="position:relative;top:0;width:0px;" data-v-4dd605a1><div class="post-nav-contents"><svg class="icon"><title>book</title><use xlink:href="#icon-book"></use></svg> <span>Table of Contents</span> <div class="post-nav-toc"><ul><li><a href="/posts/2020/04/29/runc.html#runcとは">runcとは</a></li><li><a href="/posts/2020/04/29/runc.html#使ってみる">使ってみる</a><ul><li><a href="/posts/2020/04/29/runc.html#概要">概要</a></li><li><a href="/posts/2020/04/29/runc.html#rootfsの準備">rootfsの準備</a></li><li><a href="/posts/2020/04/29/runc.html#config-jsonの準備">config.jsonの準備</a></li><li><a href="/posts/2020/04/29/runc.html#コンテナの起動">コンテナの起動</a></li><li><a href="/posts/2020/04/29/runc.html#その他のコマンドを使ってみる">その他のコマンドを使ってみる</a></li><li><a href="/posts/2020/04/29/runc.html#ps">ps</a></li><li><a href="/posts/2020/04/29/runc.html#start">start</a></li><li><a href="/posts/2020/04/29/runc.html#delete">delete</a></li></ul></li><li><a href="/posts/2020/04/29/runc.html#まとめ">まとめ</a></li><li><a href="/posts/2020/04/29/runc.html#参考">参考</a></li></ul></div></div> <div class="post-nav-comments"><svg class="icon"><title>comment</title><use xlink:href="#icon-comment"></use></svg> <a href="/posts/2020/04/29/runc.html#post-comments">
+      Comments
+    </a></div></div></aside></div> <footer class="footer" data-v-1375e54c><p class="footer-sns-links" data-v-1375e54c><a href="https://github.com/terassyi" target="_blank" class="sns-link" data-v-1375e54c><span title="GitHub: terassyi" class="sns-icon" data-v-1375e54c data-v-1375e54c><svg class="icon" style="font-size:25px;" data-v-1375e54c data-v-1375e54c><title data-v-1375e54c data-v-1375e54c>GitHub: terassyi</title><use xlink:href="#icon-github" data-v-1375e54c data-v-1375e54c></use></svg></span></a><a href="https://twitter.com/terassyi_" target="_blank" class="sns-link" data-v-1375e54c><span title="Twitter: terassyi" class="sns-icon" data-v-1375e54c data-v-1375e54c><svg class="icon" style="font-size:25px;" data-v-1375e54c data-v-1375e54c><title data-v-1375e54c data-v-1375e54c>Twitter: terassyi</title><use xlink:href="#icon-twitter" data-v-1375e54c data-v-1375e54c></use></svg></span></a></p> <p class="footer-text" data-v-1375e54c><span data-v-1375e54c>Powered by </span> <a href="https://github.com/vuejs/vuepress" target="_blank" data-v-1375e54c>
+      VuePress
+    </a> <span data-v-1375e54c> | </span> <a href="https://github.com/meteorlxy/vuepress-theme-meteorlxy" target="_blank" data-v-1375e54c>
+        meteorlxy
+      </a></p> <p class="footer-text" data-v-1375e54c>Copyright 2018-present <a href="https://github.com/meteorlxy" target="_blank">meteorlxy</a> | MIT License</p></footer></div><div class="global-ui"><!----><!----></div></div>
+    <script src="/assets/js/app.ef6e9dc3.js" defer></script><script src="/assets/js/7.77a4036e.js" defer></script><script src="/assets/js/19.f60145b2.js" defer></script>
+  </body>
+</html>
