@@ -361,3 +361,5 @@ $ sudo runc delete runc-test-centos2
 - [runCをひと通り使ってみた](https://fstn.hateblo.jp/entry/2015/08/01/231302)
 - [github](https://github.com/opencontainers/runc)
 - [runc man](https://github.com/opencontainers/runc/tree/master/man)
+
+<disqus />
