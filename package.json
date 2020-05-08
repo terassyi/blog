@@ -6,6 +6,7 @@
   "devDependencies": {
     "@vuepress/plugin-google-analytics": "^1.4.0",
     "esm": "^3.2.25",
+    "vue-tweet-embed": "^2.4.0",
     "vuepress": "^1.4.0",
     "vuepress-plugin-seo": "^0.1.2",
     "vuepress-plugin-sitemap": "^2.3.1",
