@@ -12,6 +12,7 @@ layout: Page
 - 2019.7 [nulab](https://nulab.com/ja/)にてインターン
 - 2019.8 [セキュリティ・キャンプ全国大会2019](https://www.ipa.go.jp/jinzai/camp/2019/zenkoku2019_index.html)参加
 - 2020.3 九州大学工学部電気情報工学科 卒業
+- 2020.4 [情報処理学会九州支部奨励賞受賞](https://www.ipsj-kyushu.jp/prizes/hinokuni-init)
 - 2020.4 [九州大学大学院システム情報工学府](https://www.isee.kyushu-u.ac.jp/)　入学
 
 ## Like
