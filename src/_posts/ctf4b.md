@@ -22,7 +22,7 @@ ctf4bに大学の研究室のメンバーで参加してきました．昨年は
 [https://www.seccon.jp/2019/seccon_beginners/seccon_beginners_ctf_2020_5_23_1400.html](https://www.seccon.jp/2019/seccon_beginners/seccon_beginners_ctf_2020_5_23_1400.html)
 
 ### 追記
-pwnの[elementary stack](https://terassyi.net/posts/2020/06/04/elementary_stack.html)についてポストしました．
+pwnの[elementary stack](https://terassyi.net/posts/2020/06/04/elementary-stack.html)についてポストしました．
 
 ### readme
 Miscの問題です．問題サーバで動いているコードが配布されます．
