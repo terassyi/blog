@@ -15,6 +15,8 @@ layout: Page
 - 2020.4 [情報処理学会九州支部奨励賞受賞](https://www.ipsj-kyushu.jp/prizes/hinokuni-init)
 - 2020.4 [九州大学大学院システム情報工学府](https://www.isee.kyushu-u.ac.jp/)　入学
 - 2020.7 SecHack365 '20 開発駆動
+- 2020.10 [セキュリティ・ミニキャンプ in 福岡 2020 チューター](https://www.security-camp.or.jp/minicamp/fukuoka2020.html)
+- 2020.10 [セキュリティ・ネクストキャンプ2020 オンライン](https://www.ipa.go.jp/jinzai/camp/2020/next2020_index.html)
 
 ## Like
 - golang
