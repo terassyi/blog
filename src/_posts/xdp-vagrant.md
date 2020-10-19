@@ -5,7 +5,7 @@ tags:
     - ebpf
     - vagrant
 date: 2020-10-19
-title: XDPじ実行できるVagrantfileを探して
+title: XDPが実行できるVagrantfileを探して
 description: XDPが実行できるVagrantfileを作ってXDPに入門します
 ---
 
