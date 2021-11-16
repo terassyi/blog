@@ -449,13 +449,14 @@ $ go build .
 #### packet_counter
 `packet_counter`は指定されたNICが受信したパケットをプロトコルごとにカウントするプログラムです．
 `main.go`と`bpf/xdp.c`から構成されます．
-まずはXDPのコードから見ていきましょう．
+それぞれに分けてみていきます．
 
 ##### XDP
-まずはヘッダのインクルードと構造体の定義です．
+まずはXDPのコードから見ていきましょう．
+最初はヘッダのインクルードと構造体の定義です．
 `bpf_helpers.h`をインクルードします．
 さらにパケットを表現する構造体を定義します．
-しかし，これは`linux/if_ether.h`や`netinet/ip.h`などを使用してもかまいません．(むしろその方がよいと思います)
+しかし，これは`linux/if_ether.h`や`netinet/ip.h`などを使用してもかまいません．
 
 続いてBPFマップを定義します．
 packet_counterでは`BPF_MAP_TYPE_PERCPU_ARRAY`を定義しています．
@@ -478,16 +479,768 @@ int packet_count(struct xdp_md *ctx) {
 }
 ```
 `xdp`というセクション名を割り当てた関数がパケットの受信の度に呼び出されることとなります．
-この関数は`xdp_md`
+この関数は`xdp_md`という構造体を引数に取ります．
+の構造体は受信したパケットなどの情報を保持したコンテキストです．
+定義は[header/bpf_helpers.h](https://github.com/terassyi/go-xdp-examples/blob/master/header/bpf_helpers.h)にあり，以下のようになっています．
+```c
+struct xdp_md {
+  __u32 data;
+  __u32 data_end;
+  __u32 data_meta;
+  /* Below access go through struct xdp_rxq_info */
+  __u32 ingress_ifindex; /* rxq->dev->ifindex */
+  __u32 rx_queue_index;  /* rxq->queue_index  */
+
+  __u32 egress_ifindex;  /* txq->dev->ifindex */
+};
+```
+`data`が受信したパケットデータの先頭のポインタ，`data_end`がそのパケットデータの末尾のポインタとなっています．
+
+それでは`packet_count`の中身を見ていきましょう．
+パケットデータの先頭，末尾のポインタを移動させながらパケットをパースするのでそのための変数`data`, `data_end`を定義します．
+```c
+void *data_end = (void *)(long)ctx->data_end;
+void *data = (void *)(long)ctx->data;
+```
+続いてethernetヘッダをパースします．
+```c
+struct ethhdr *ether = data;
+if (data + sizeof(*ether) > data_end) {
+  return XDP_ABORTED;
+}
+```
+今回はIPv4プロトコルのみを扱うので`ether->h_proto`で分岐し，IPv4にマッチした場合のみ以下の処理を実行します．
+`data`をethernetヘッダのサイズ分ずらすことでIPv4パケットの先頭にポインタを合わせてパースします．
+その後，先ほど定義した`protocols`マップからIPプロトコルタイプをキーとして値を取り出しインクリメントすることでパケットをカウントします．
+```c
+if (ether->h_proto == 0x08U) {  // htons(ETH_P_IP) -> 0x08U
+  data += sizeof(*ether);
+  struct iphdr *ip = data;
+  if (data + sizeof(*ip) > data_end) {
+    return XDP_ABORTED;
+  }
+  // Increase counter in "protocols" eBPF map
+  __u32 proto_index = ip->protocol;
+  __u64 *counter = bpf_map_lookup_elem(&protocols, &proto_index);
+  if (counter) {
+    (*counter)++;
+  }
+}
+```
+最後にパケットをカーネルに流します．
+```c
+return XDP_PASS;
+```
+
+##### Go
+続いてコントロールプレーンのコードを見ていきます．
+`main.go`に
+```
+//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -cc clang XdpProg ./bpf/xdp.c -- -I../header
+```
+と記述することによって`bpf2go`を`go generate`で使えるようにしています．
+
+まずbpfプログラムとマップを保持する構造体を定義します．
+```go
+type Collect struct {
+	Prog *ebpf.Program `ebpf:"packet_count"`
+	Protocols *ebpf.Map `ebpf:"protocols"`
+}
+```
+それでは`main`関数の処理を見ていきましょう．
+コマンドライン引数からXDPプログラムをアタッチするインターフェース名を受け取り，そのインターフェースの情報を取得する処理を最初に行っています．
+インターフェース情報の取得などは[vishvananda/netlink](https://github.com/vishvananda/netlink)を使用します．
+
+前準備が終わると本命のXDP関連の処理となります．
+`LoadXdpProg()`, `LoadAdnAssign()`は`bpf2go`から自動生成されるコードです．
+自動生成されるコードについては今回は詳しく触れません．
+`bpf2go`を実行する際に引数として渡す値に基づいて`Load<Name>()`生成されます．(今回の場合`XdpProg`という値を渡したので`LoadXdpProg()`)
+この処理によってXDPのプログラムとマップをロードして`Collect`構造体にマッピングします．
+```go
+var collect = &Collect{}
+spec, err := LoadXdpProg()
+if err != nil {
+	panic(err)
+}
+if err := spec.LoadAndAssign(collect, nil); err != nil {
+	panic(err)
+}
+```
+引き続いてNICへのアタッチです．
+`cilium/ebpf`にはXDPをNICにアタッチするための関数は用意されていないのでnetlink経由でアタッチします．
+netlinkにはXDPをアタッチする関数として[netlink.LinkSetXdpFd()](https://pkg.go.dev/github.com/vishvananda/netlink#LinkSetXdpFd)も用意されています．
+今回は明示的に`Generic XDP`を指定してアタッチするために[netlink.LinkSetXdpFdWithFlags](https://pkg.go.dev/github.com/vishvananda/netlink#LinkSetXdpFdWithFlags)を使用しています．
+基本的には`netlink.LinkSetXdpFd()`でアタッチして問題ありません．
+こちらの記事([Generic XDPを使えばXDP動作環境がお手軽に構築できるようになった](https://yunazuno.hatenablog.com/entry/2017/06/12/094101#f-f6e9ed6b))にあるようにデフォルトでは`Native`, `Generic`の順にアタッチが試行されるようです．
+以前`XDP_REDIRECT`を使用する際に明示的に`Generic XDP`を指定しなければパケット転送が動作しないというバグを踏んだことがあったため念のため明示的に`Generic XDP`を指定しています．
+```go
+if err := netlink.LinkSetXdpFdWithFlags(link, collect.Prog.FD(), nl.XDP_FLAGS_SKB_MODE); err != nil {
+	panic(err)
+}
+defer func() {
+	netlink.LinkSetXdpFdWithFlags(link, -1, nl.XDP_FLAGS_SKB_MODE)
+}()
+```
+アタッチ関連の処理の後はXDPと連動したパケットカウント処理となります．
+無限ループと`ticker`による1秒感覚の定期処理の中で以下のような処理を行います．
+`collect.Protocols.Lookup()`でBPFマップから値を取り出します．
+この時引数にkey, valueの変数のポインタを渡してあげる必要があります．
+結果としてマップに値があれば`v`に値が格納されます．
+keyに対応する値が存在していなくともerrorは返さないのでこのような記述となっています．
+また，今回定義したBPFマップが`BPF_MAP_TYPE_PERCPU_ARRAY`なので`v`は`[]uint64`型です．
+CPUごとにインデックスされて値が格納されるため，今回の実験環境では要素2のスライスとして値が格納されるのでこのような記述となっています．
+```go
+var v []uint64
+var i uint32
+for i = 0; i < 32; i++ {
+	if err := collect.Protocols.Lookup(&i, &v); err != nil {
+		panic(err)
+	}
+	if v[1] > 0 {
+		fmt.Printf("%s : %v", getProtoName(i), v[1])
+	} else if v[0] > 0 {
+		fmt.Printf("%s : %v", getProtoName(i), v[0])
+	}
+}
+```
+
+以上で`packet_counter`は完成です．
+パケットをカウントする単純な処理しかしていませんが基本的なXDPのアタッチやマップの定義，参照などは他のプロジェクトでも大体同じ感じです．
+
+##### 実行
+ビルドして実行してみます．
+実験環境は`netns.sh`を使用して作成します．
+ネットワーク構成は以下のような感じです．
+
+![xdp-example-network-1](/img/xdp-example-network-1.png)
+
+```shell
+$ sudo ./netns.sh build
+$ go generate
+$ go build .
+```
+では動かしてみましょう．
+XDPプログラムは`node1`のnetnsで動かします．
+```shell
+$ sudo ip netns exec node1 ./packet_counter -iface veth1
+```
+コンソールが返ってこなければ正常に起動しているはずです．
+別のターミナルを起動して`veth1`のアドレス`192.168.0.2`に対して`ping`を飛ばしてみましょう．
+```shell
+$ ping -c 3 192.168.0.2
+PING 192.168.0.2 (192.168.0.2) 56(84) bytes of data.
+64 bytes from 192.168.0.2: icmp_seq=1 ttl=64 time=0.052 ms
+64 bytes from 192.168.0.2: icmp_seq=2 ttl=64 time=0.050 ms
+64 bytes from 192.168.0.2: icmp_seq=3 ttl=64 time=0.049 ms
+
+--- 192.168.0.2 ping statistics ---
+3 packets transmitted, 3 received, 0% packet loss, time 2033ms
+rtt min/avg/max/mdev = 0.049/0.050/0.052/0.001 ms
+```
+このように応答がかえってくるはずです．
+では`packet_counter`の画面をみてみます．
+```
+IPPROTO_ICMP : 3
+```
+このようにICMPパケットが3つカウントされていることがわかります．
+プロトコルごとにカウントするのでTCPやUDPでも試してみてください．
+
+実験が終了したらnetnsの後片付けをしておきましょう．
+```shell
+$ sudo ./netns.sh clean
+```
 
 #### xdp_dump
+`xdp_dump`はTCPパケットをキャプチャしてダンプするプログラムです．
+`main.go`と`bpf/xdp_dump.c`から構成されます．
+先ほどと同様にXDPとGoに分けてみていきましょう．
+
+##### XDP
+まずはXDPからです．
+ヘッダのインクルードや構造体定義のやり方は[packet_counter](#xdp-2)と同様です．
+今回は`BPF_MAP_TYPE_PERF_EVENT_ARRAY`を使用します．
+```c
+BPF_MAP_DEF(perfmap) = {
+    .map_type = BPF_MAP_TYPE_PERF_EVENT_ARRAY,
+    .max_entries = 128,
+};
+BPF_MAP_ADD(perfmap);
+```
+さらに`perf_event_item`という`perfmap`に格納する構造体を定義しておきます．
+```c
+struct perf_event_item {
+  __u32 src_ip, dst_ip;
+  __u16 src_port, dst_port;
+};
+```
+続いてXDP関数の処理を見ていきます．
+`xdp_dump`という名前で定義しています．
+EthernetヘッダやIPv4ヘッダのパースは[packet_counter](#xdp-2)と同様です．
+今回はTCPヘッダもパースするのでその処理を以下に抜粋します．
+基本的にやり方は変わりませんが，IPv4ヘッダは可変長なので`ip->ihl * 4`でヘッダ長を計算して加算してあげる必要があります．
+```c
+data += ip->ihl * 4;
+  struct tcphdr *tcp = data;
+  if (data + sizeof(*tcp) > data_end) {
+    return XDP_ABORTED;
+  }
+```
+その後は`SYN`フラグがついたパケットのみを対象としてperf eventを発火させます．
+`packet_size`はあらかじめ`data - data_end`で求めています．
+プログラム中のコメントにある通り，`flags`にはCPUのIDと`ctx(xdp_md struct)`の使用する範囲を指定した値をいれています．
+```c
+if (tcp->syn) {
+  struct perf_event_item evt = {
+    .src_ip = ip->saddr,
+    .dst_ip = ip->daddr,
+    .src_port = tcp->source,
+    .dst_port = tcp->dest,
+  };
+  // flags for bpf_perf_event_output() actually contain 2 parts (each 32bit long):
+  //
+  // bits 0-31: either
+  // - Just index in eBPF map
+  // or
+  // - "BPF_F_CURRENT_CPU" kernel will use current CPU_ID as eBPF map index
+  //
+  // bits 32-63: may be used to tell kernel to amend first N bytes
+  // of original packet (ctx) to the end of the data.
+
+  // So total perf event length will be sizeof(evt) + packet_size
+  __u64 flags = BPF_F_CURRENT_CPU | (packet_size << 32);
+  bpf_perf_event_output(ctx, &perfmap, flags, &evt, sizeof(evt));
+}
+```
+その後は`XDP_PASS`して終了です．
+
+##### Go
+続いてGoのプログラムを見ていきます．
+コマンドライン引数のパース，XDPプログラムやマップのロード，アタッチは[packet_counter](#xdp-2)と変わらないので省略して`perf event`の取り扱いを見ていきます．
+XDP側で定義したものと同じフィールドを持つ`perfEventItem`構造体を定義しておきます．
+```go
+type perfEventItem struct {
+	SrcIp uint32
+	DstIp uint32
+	SrcPort uint16
+	DstPort uint16
+}
+```
+次に`perf event`を読むためのReaderを生成します．
+```go
+perfEvent, err := perf.NewReader(collect.PerfMap, 4096)
+```
+
+`goroutine`で起動している部分が`perf event`をハンドリングする処理部です．
+`perfEvent.Read()`でeventをpollして読み込みます．
+無事読み込みが終了した場合`event.RawSample`に格納されたバイト列を`binary.Read()`で`perfEventItem`構造体にパースします．
+さらに，`event.RawSample`が`perfEventItem`の大きさ(METADATA_SIZE = 12として定義している)よりも大きければパケットデータをダンプしてあげています．
+
+```go
+go func() {
+	var event perfEventItem
+	for {
+		evnt, err := perfEvent.Read()
+		if err != nil {
+			if errors.Unwrap(err) == perf.ErrClosed {
+				break
+			}
+			panic(err)
+		}
+		reader := bytes.NewReader(evnt.RawSample)
+		if err := binary.Read(reader, binary.LittleEndian, &event); err != nil {
+			panic(err)
+		}
+		fmt.Printf("TCP: %v:%d -> %v:%d\n",
+			intToIpv4(event.SrcIp), ntohs(event.SrcPort),
+			intToIpv4(event.DstIp), ntohs(event.DstPort),
+		)
+		if len(evnt.RawSample) - METADATA_SIZE > 0 {
+			fmt.Println(hex.Dump(evnt.RawSample[METADATA_SIZE:]))
+		}
+		received += len(evnt.RawSample)
+		lost += int(evnt.LostSamples)
+	}
+}()
+```
+
+`xdp_dump`では`perf event`を使用したためイベント駆動で処理することができました．
+
+##### 実行
+それでは動かしてみます．
+今回も`netns.sh`で実験環境を作ってプログラムをビルドします．
+```shell
+$ go generate
+$ go build .
+$ sudo ./netns.sh build
+```
+続いて`node1`の中で`xdp_dump`を起動しましょう．
+起動すると以下のようにTCPのSYNパケットを待ちます．
+```shell
+$ sudo ip netns exec node1 ./xdp_dump -iface veth1
+All new TCP connection requests (SYN) coming to this host will be dumped here.
+
+```
+今回はTCPパケットを扱うので別のターミナルでpythonをつかってHTTPサーバを起動してそこにアクセスしてみます．
+```shell
+$ sudo ip netns exec node1 python3 -m http.server 8888
+```
+もう一つターミナルを開いて`curl`でHTTPサーバにアクセスしてみましょう．
+```shell
+$ curl http://192.168.0.2:8888
+```
+通常通りレスポンスが返ってくると思います．TCP(SYN)パケットがダンプされていると思います．
+```shell
+All new TCP connection requests (SYN) coming to this host will be dumped here.
+
+TCP: 192.168.0.3:43910 -> 192.168.0.2:8888
+00000000  e2 f7 28 dc a0 65 12 4b  fe 5b 64 20 08 00 45 00  |..(..e.K.[d ..E.|
+00000010  00 3c 93 c9 40 00 40 06  25 9d c0 a8 00 03 c0 a8  |.<..@.@.%.......|
+00000020  00 02 ab 86 22 b8 9c 36  ba 88 00 00 00 00 a0 02  |...."..6........|
+00000030  fa f0 81 84 00 00 02 04  05 b4 04 02 08 0a f4 c8  |................|
+00000040  ac 0b 00 00 00 00 01 03  03 07 00 00 00 00 00 00  |................|
+```
+
+実験が終わったらnetnsを削除しておきましょう．
 
 #### basic_firewall
+3つめのサンプルは`basic_firewall`です．
+IPv4ネットワークを入力として与えることで該当した宛先からのパケットをドロップします．
+`basic_firewall`配下の`main.go`と`bpf/xdp_fw.c`から構成されます．
+これまでと同様にXDPとGoに分けて見ていきましょう．
+
+##### XDP
+これまでのサンプルと同様にヘッダのインクルードと構造体の定義を行います．
+その後BPFマップの定義を行います．
+今回はふたつのマップを定義します．タイプはそれぞれ`BPF_MAP_TYPE_PERCPU_ARRAY`, `BPF_MAP_TYPE_LPM_TRIE`です．
+
+`matches`は通常のArrayです．
+入力したルール(IPv4ネットワーク)にマッチしたパケットをカウントするためのマップです．
+```c
+BPF_MAP_DEF(matches) = {
+    .map_type = BPF_MAP_TYPE_PERCPU_ARRAY,
+    .key_size = sizeof(__u32),
+    .value_size = sizeof(__u64),
+    .max_entries = MAX_RULES,
+};
+BPF_MAP_ADD(matches);
+```
+
+`blacklist`は入力されたルールを保持するマップです．
+`lpm trie`という特殊なマップとして定義します．
+`lpm trie`は[Longest Prefix Match with Trie Tree](https://www.lewuathe.com/longest-prefix-match-with-trie-tree.html)を意味しています．
+ルートテーブルなどを作成する際に使用します．
+IPv4アドレスとプレフィックスをキー，任意の値をバリューとして保存して使用します．
+
+今回マップの定義にて`BPF_F_NO_PREALLOC`を指定しています．
+`BPF_F_NO_PREALLOC`はプリアロケーションによるオーバーヘッドを削減するためのフラグです．
+詳細は以下のリンクを参照してください．
+- [Reduce pre-allocation overhead](https://pingcap.com/blog/tips-and-tricks-for-writing-linux-bpf-applications-with-libbpf#reduce-pre-allocation-overhead)
+
+今回のサンプルではこのフラグを指定しなければBPFマップ作成が`Invalid argument`で失敗してしまいました．
+これは[dropbox/goebpfのサンプル](https://github.com/dropbox/goebpf/blob/master/examples/xdp/basic_firewall/ebpf_prog/xdp_fw.c#L46)では指定されなくても動作していました．
+一方今回`cilium/ebpf`を使用した際は与える必要がありました．
+同様のエラーに遭遇した方は参考にしてください．
+
+```c
+BPF_MAP_DEF(blacklist) = {
+    .map_type = BPF_MAP_TYPE_LPM_TRIE,
+    .key_size = sizeof(__u64),
+    .value_size = sizeof(__u32),
+    .max_entries = MAX_RULES,
+	.map_flags = BPF_F_NO_PREALLOC,
+};
+BPF_MAP_ADD(blacklist);
+```
+
+さて，マップの定義が終わったのでXDP関数の処理を見ていきます．今回は`firewall`という関数名です．
+まずはこれまで通りEthernet, IPv4パケットのパースを行います．
+
+その後，`blacklist`を参照するための`key`を作成します．
+`key`はプレフィックスとアドレスのフィールドを持っています．
+
+```c
+struct {
+  __u32 prefixlen;
+  __u32 saddr;
+} key;
+
+key.prefixlen = 32;
+key.saddr = ip->saddr;
+```
+
+以下がメインの処理部です．
+先ほど用意した`key`で`blacklist`をlookupしてルールにマッチした場合`matches`からもカウンタを取り出してインクリメントしています．
+その後，`XDP_DROP`を返すことでパケットをドロップします．
+マッチしなかった場合は単に`XDP_PASS`を返します．
+
+```c
+__u64 *rule_idx = bpf_map_lookup_elem(&blacklist, &key);
+if (rule_idx) {
+  // Matched, increase match counter for matched "rule"
+  __u32 index = *(__u32*)rule_idx;  // make verifier happy
+  __u64 *counter = bpf_map_lookup_elem(&matches, &index);
+  if (counter) {
+    (*counter)++;
+  }
+  return XDP_DROP;
+}
+return XDP_PASS;
+```
+
+##### Go
+次はコントロールプレーンを見ていきます．
+コマンドライン引数のパースやXDPプログラムのロードとアタッチはこれまでと同様です．
+今回は入力としてドロップするルールを渡します．
+また，`lpm trie`を使用するので`lpmTrieKey`という型を用意しておきます．
+```go
+type lpmTrieKey struct {
+	prefixlen uint32
+	addr uint32
+}
+```
+
+この型を使用して入力されたドロップルールを`blacklist`に挿入します．
+```go
+for index, ip := range ipList {
+	fmt.Printf("\t%s\n", ip)
+	k := ipNetToUint64(createLPMTrieKey(ip))
+	if err := collect.Blacklist.Put(k, uint32(index)); err != nil {
+		panic(err)
+	}
+}
+```
+
+以下はパケットのカウントを表示する部分です`packet_counter`で出てきたものとほぼ同じです．
+`ticker`で定期的に処理しています．
+```go
+for {
+	select {
+	case <-ticker.C:
+		var v []uint64
+		var i uint32
+		for i = 0; i < uint32(len(ipList)); i++ {
+			if err := collect.Matches.Lookup(&i, &v); err != nil {
+				panic(err)
+			}
+			if v[0] != 0 {
+				fmt.Printf("%18s\t%d\n", ipList[i], v[0])
+			} else if v[1] != 0 {
+				fmt.Printf("%18s\t%d\n", ipList[i], v[1])
+			}
+		}
+		fmt.Println()
+	case <-ctrlC:
+		fmt.Println("\nDetaching program and exit")
+		return
+	}
+}
+```
+
+`basic_firewall`は`BPF_MAP_TYPE_LPM_TRIE`を利用することで簡単にIPアドレスがルールにマッチするかどうかを判断することができました．
+
+##### 実行
+それでは動かしてみます．
+今回もこれまでと同様に`netns`で実験環境を用意します．
+```shell
+$ go generate
+$ go build .
+$ sudo ./netns.sh build
+```
+では`basic_firewall`を起動しましょう．今回は以下のように`192.168.0.0/24`をブロックするように指定して実行します．
+```shell
+$ sudo ip netns exec node1 ./basic_firewall -iface veth1 -drop 192.168.0.0/24
+Blacklisting IPv4 Addresses...
+        192.168.0.0/24
+
+```
+それでは別のターミナルから`ping`を飛ばしてみましょう．
+`192.168.0.3 -> 192.168.0.2`向けのパケットが飛ぶはずなのでこれは`basic_firewall`を動かしている間はレスポンスがないはずです．
+```shell
+$ ping 192.168.0.2
+```
+というわけで`basic_firewall`を動かしているターミナルに戻ってみます．
+```
+Blacklisting IPv4 Addresses...
+        192.168.0.0/24
+
+    192.168.0.0/24      1
+
+    192.168.0.0/24      2
+
+    192.168.0.0/24      3
+
+    192.168.0.0/24      4
+
+    192.168.0.0/24      5
+```
+このようにブロックしたパケットをカウントして出力されています．
+`Crtl + c`でプログラムを終了させると`ping`の応答が返ってくるようになることを確認してください．
+
+実験が終了したら`netns`を掃除しておきましょう．
 
 #### bpf_redirect_map
+4つめのサンプルは`bpf_redirect_map`です．
+このサンプルはICPMパケットを対象にICMPパケットの送信者にリダイレクトするというものとなっています．
+`basic_firewall`配下の`main.go`と`bpf/xdp_fw.c`から構成されます．
+これまでと同様にXDPとGoに分けて見ていきましょう．
 
-## まとめ
+##### XDP
+これまでのサンプルと同様にヘッダのインクルードと構造体の定義を行います．
+その後BPFマップの定義を行います．
 
+今回は`BPF_MAP_TYPE_DEVMAP`というタイプのマップを使用します．
+このマップは`bpf_redirect()`, `bpf_redirect_map()`を使用するためにデバイスのインデックスを保持しておくマップです．
+
+こちらも少しハマりどころがあり，[dropbox/goebpfのサンプル](https://github.com/dropbox/goebpf/blob/master/examples/xdp/bpf_redirect_map/ebpf_prog/xdp.c#L44)では`max_entries`の値が`64`となっていますが`cilium/ebpf`を使用した場合マップに値を入れるときに`panic: update failed: key too big for map: argument list too long`と怒られます．
+ですので今回は`1024`という大きめの数字を使用しています．
+
+```c
+/* XDP enabled TX ports for redirect map */
+BPF_MAP_DEF(if_redirect) = {
+    .map_type = BPF_MAP_TYPE_DEVMAP,
+    .key_size = sizeof(__u32),
+    .value_size = sizeof(__u32),
+    .max_entries = 1024,
+};
+BPF_MAP_ADD(if_redirect);
+```
+
+次にXDP関数を見ていきます．
+関数名は`xdp_test`です．
+これまで通りEthernet, IPv4パケットにパースします．
+さらに，IPパケットのプロトコルをみてicmpでなければPASSします．
+
+続いて，ルートテーブルのlookup処理です．
+XDPではカーネルのルートテーブルを参照することができます．
+参照のためには
+```c
+static int (*bpf_fib_lookup)(void *ctx, void *params, int plen, __u32 flags) = (void*) // NOLINT
+     BPF_FUNC_fib_lookup;
+```
+という関数を使用します．
+この`bpf_fib_lookup()`に渡す`bpf_fib_lookup`構造体の定義について確認します．
+```c
+struct bpf_fib_lookup {
+  /* input:  network family for lookup (AF_INET, AF_INET6)
+  * output: network family of egress nexthop
+  */
+  __u8	family;
+
+  /* set if lookup is to consider L4 data - e.g., FIB rules */
+  __u8	l4_protocol;
+  __be16	sport;
+  __be16	dport;
+
+  /* total length of packet from network header - used for MTU check */
+  __u16	tot_len;
+
+  /* input: L3 device index for lookup
+  * output: device index from FIB lookup
+  */
+  __u32	ifindex;
+
+  union {
+    /* inputs to lookup */
+    __u8	tos;		/* AF_INET  */
+    __be32	flowinfo;	/* AF_INET6, flow_label + priority */
+
+    /* output: metric of fib result (IPv4/IPv6 only) */
+    __u32	rt_metric;
+};
+
+  union {
+    __be32		ipv4_src;
+    __u32		ipv6_src[4];  /* in6_addr; network order */
+};
+
+  /* input to bpf_fib_lookup, ipv{4,6}_dst is destination address in
+  * network header. output: bpf_fib_lookup sets to gateway address
+  * if FIB lookup returns gateway route
+  */
+  union {
+    __be32		ipv4_dst;
+    __u32		ipv6_dst[4];  /* in6_addr; network order */
+};
+
+  /* output */
+  __be16	h_vlan_proto;
+  __be16	h_vlan_TCI;
+  __u8	smac[6];     /* ETH_ALEN */
+  __u8	dmac[6];     /* ETH_ALEN */
+};
+```
+ご覧のようにかなりいろいろなフィールドが定義されています．
+しかし，単なるIPv4ルートテーブルを参照するだけであればそこまで大変ではありません．
+セットするフィールドは以下です．
+- family
+- ipv4_src
+- ipv4_dst
+- ifindex
+
+これらのフィールドをIPパケットとingressのifindexをもとにセットし，`bpf_fib_lookup()`に渡します．
+その結果がfailedでなく`no neigh`でなければルートが引けたことになるのでその結果が引数として渡した`fib_params`に格納されます．
+
+```c
+struct bpf_fib_lookup fib_params;
+
+// fill struct with zeroes, so we are sure no data is missing
+__builtin_memset(&fib_params, 0, sizeof(fib_params));
+
+fib_params.family	= AF_INET;
+// use daddr as source in the lookup, so we refleect packet back (as if it wcame from us)
+fib_params.ipv4_src	= ip_header->daddr;
+// opposite here, the destination is the source of the icmp packet..remote end
+fib_params.ipv4_dst	= ip_header->saddr;
+fib_params.ifindex = ctx->ingress_ifindex;
+
+bpf_printk("doing route lookup dst: %d\n", fib_params.ipv4_dst);
+int rc = bpf_fib_lookup(ctx, &fib_params, sizeof(fib_params), 0);
+if ((rc != BPF_FIB_LKUP_RET_SUCCESS) && (rc != BPF_FIB_LKUP_RET_NO_NEIGH)) {
+    bpf_printk("Dropping packet\n");
+    return XDP_DROP;
+} else if (rc == BPF_FIB_LKUP_RET_NO_NEIGH) {
+    // here we should let packet pass so we resolve arp.
+    bpf_printk("Passing packet, lookup returned %d\n", BPF_FIB_LKUP_RET_NO_NEIGH);
+    return XDP_PASS;
+}
+```
+
+ルートが引けたらリダイレクト処理を行います．
+IPパケットの宛先と送信元を入れ替えます．
+さらに`fib_params`に格納された`dmac`と`smac`をパケットに上書きします．
+そして，
+```c
+static int (*bpf_redirect_map)(void *map, __u32 key, __u64 flags) = (void*) // NOLINT
+     BPF_FUNC_redirect_map;
+```
+を実行してリダイレクトします．
+引数には定義したDEVMAPである`if_redirect`, それをlookupするキーとしてのifindex, flagは0です．
+
+これによりICMPパケットを送信元にそのままリダイレクトします．
+
+##### Go
+続いてGoのコントロールプレーンをみていきます．
+コマンドライン引数のパースやXDPプログラムのロードとアタッチはこれまでと同様です．
+今回はNICを二つ引数として渡してあげます．
+`bpf2go`で自動生成した関数を用いたプログラムのロードはれまでと同様です．
+今回のリダイレクトのプログラムは二つのNICにアタッチしなければなりません．
+さらに，アタッチするNICのインデックスを`DEVMAP`に登録する必要があります．
+そこで以下のように`Attach()`関数を作成して上記の操作をまとめてしまいます．
+
+```go
+func Attach(infList []string, prog *ebpf.Program, ifRedirect *ebpf.Map) error {
+	for _, inf := range infList {
+		link, err := netlink.LinkByName(inf)
+		if err != nil {
+			return err
+		}
+		if err := netlink.LinkSetXdpFdWithFlags(link, prog.FD(), nl.XDP_FLAGS_SKB_MODE); err != nil {
+			return err
+		}
+		if err := ifRedirect.Put(uint32(link.Attrs().Index), uint32(link.Attrs().Index)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+```
+
+`Detach()`も同様に定義しておき`defer`に渡しておきます．
+そのあとは`Ctrl + c`での終了処理を行うのみです．
+
+```gov
+if err := Attach(infList, collect.Prog, collect.IfRedirect); err != nil {
+		panic(err)
+}
+defer Detach(infList)
+
+ctrlC := make(chan os.Signal, 1)
+signal.Notify(ctrlC, os.Interrupt)
+for {
+	select {
+	case <-ctrlC:
+		fmt.Println("\nDetaching program and exit")
+		return
+	}
+}
+```
+
+##### 実行
+それでは動かしてみましょう．
+今回も`netns`で実験を行います．
+```shell
+$ go generate
+$ go build .
+$ sudo ./netns.sh build
+```
+それでは動かしてみます．
+今回は以下のようにこれまでと少し異なる環境を用意しています．
+![xdp-example-network-2.png](/img/xdp-example-network-2.png)
+
+XDPプログラムは`node1`で`veth1`と`veth2`にアタッチします．
+```shell
+$ sudo ip netns exec node1 ./bpf_redirect_map -iflist veth1,veth2
+```
+コンソールが返ってこなければ正常に動作しています．
+今回は特に何も出力してくれないので別ターミナルで`ping`と`tcpdump`を使って確認します．
+
+それでは`192.168.1.5`に`ping`を飛ばしてみます．その様子を`tcpdump`で確認します．
+```shell
+$ ping -c 1 192.168.1.5
+```
+まずは`bpf_redirect_map`を動かさない状態でパケットを確認します．
+###### bpf_redirect_mapなし
+```shell
+sudo tcpdump -i veth0 -n -vvv
+tcpdump: listening on veth0, link-type EN10MB (Ethernet), capture size 262144 bytes
+11:09:49.160300 IP (tos 0x0, ttl 64, id 19056, offset 0, flags [DF], proto ICMP (1), length 84)
+    192.168.0.3 > 192.168.1.5: ICMP echo request, id 57, seq 1, length 64
+11:09:49.160339 IP (tos 0x0, ttl 63, id 13495, offset 0, flags [none], proto ICMP (1), length 84)
+    192.168.1.5 > 192.168.0.3: ICMP echo reply, id 57, seq 1, length 64
+^C
+2 packets captured
+2 packets received by filter
+0 packets dropped by kernel
+```
+このようにecho request, replyが一往復みられます．
+
+つぎに`bpf_redirect_map`を動かした状態で同様に`ping`を飛ばしてみます．
+```shell
+$ sudo ip netns exec node1 ./bpf_redirect_map -iflist veth1,veth2
+```
+###### bpf_redirect_mapあり
+```shell
+sudo tcpdump -i veth0 -n -vvv
+tcpdump: listening on veth0, link-type EN10MB (Ethernet), capture size 262144 bytes
+11:13:10.304324 IP (tos 0x0, ttl 64, id 29369, offset 0, flags [DF], proto ICMP (1), length 84)
+    192.168.0.3 > 192.168.1.5: ICMP echo request, id 58, seq 1, length 64
+11:13:10.304357 IP (tos 0x0, ttl 64, id 29369, offset 0, flags [DF], proto ICMP (1), length 84)
+    192.168.1.5 > 192.168.0.3: ICMP echo request, id 58, seq 1, length 64
+11:13:10.304493 IP (tos 0x0, ttl 64, id 29370, offset 0, flags [none], proto ICMP (1), length 84)
+    192.168.0.3 > 192.168.1.5: ICMP echo reply, id 58, seq 1, length 64
+11:13:10.304500 IP (tos 0x0, ttl 64, id 29370, offset 0, flags [none], proto ICMP (1), length 84)
+    192.168.1.5 > 192.168.0.3: ICMP echo reply, id 58, seq 1, length 64
+^C
+4 packets captured
+4 packets received by filter
+0 packets dropped by kernel
+```
+今度は4つパケットがキャプチャされています．
+ICMPのIDをみてみるとどのパケットも58となっています．
+一方で宛先と送信元が入れ替わっているパケットがみられます．
+
+このようにNICからNICへのリダイレクト処理もXDPで行うことができます．
+
+実験終了後には`netns`をお掃除しましょう．
+
+
+## おわりに
+今回はXDPに入門してみました．
+だいぶ大作な記事になってしまいました．
+XDPの概要やXDPを扱うために必要な周辺知識の紹介，実践編と段階的にXDPを理解できるように書きました．
+結構ハマりどころが多い技術なので，私が勉強する際にハマった箇所はできるだけ書き起こしました．
+XDP関連の日本語の記事はあまり多くないため参考になれば幸いです．
+XDPでパケット処理しましょう．
 
 ## 参考
 
@@ -515,8 +1268,10 @@ int packet_count(struct xdp_md *ctx) {
 - [BPF In Depth: Communicating with Userspace](https://blogs.oracle.com/linux/post/bpf-in-depth-communicating-with-userspace)
 - [cilium docs bpf #llvm](https://docs.cilium.io/en/stable/bpf/#llvm)
 - [How to compile a kernel with XDP support](https://medium.com/@christina.jacob.koikara/how-to-compile-a-kernel-with-xdp-support-c245ed3460f1)
+- [Reduce pre-allocation overhead](https://pingcap.com/blog/tips-and-tricks-for-writing-linux-bpf-applications-with-libbpf#reduce-pre-allocation-overhead)
 - [cilium/ebpf](https://github.com/cilium/ebpf)
 - [dropbox/goebpf](https://github.com/dropbox/goebpf)
+- [vishvananda/netlink](https://github.com/vishvananda/netlink)
 
 <script>
 import { Tweet } from 'vue-tweet-embed/dist'
