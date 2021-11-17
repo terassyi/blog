@@ -21,7 +21,7 @@ XDPとはeXpress Data Pathの略でLinuxカーネル内で動作するeBPFベー
 XDPには以下のようなメリットがあります．
 - カーネルを修正することなく柔軟にパケット処理機能を実装することができる
 - 特別なハードウェアを準備することなく利用することができる
-- 高速にパケットをしょりすることができる
+- 高速にパケットを処理することができる
 - 既存のTCP/IPスタックを置き換えることなく協調して動作させることができる
 
 ## ユースケース
@@ -107,7 +107,7 @@ BPFマップはその用途に対して25種類のタイプが存在します．
 - BPF_MAP_TYPE_SK_STORAGE
 
 たくさんあります．
-しかし，BPF(XDP)を使う際によく使うマップはそんなに種類はなく**太字**にしているものくらいだと思います．また，**斜体太字**にしているマップはXDPでよく使うマップではないかと思います．
+しかし，BPF(XDP)を使う際によく使うマップはそんなに種類はなく,**太字**にしているものくらいだと思います．
 
 - [BPF In Depth: Communicating with Userspace](https://blogs.oracle.com/linux/post/bpf-in-depth-communicating-with-userspace)
 - [bpf(2) - Linux manual page - man7.org](https://man7.org/linux/man-pages/man2/bpf.2.html)
@@ -128,7 +128,7 @@ int bpf(int cmd, union bpf_attr *attr, unsigned int size);
 #### マップ関連
 - `void *bpf_map_lookup_elem(struct bpf_map *map, const void *key)`
 	- keyに対応するvalueを探す
-	- 値のポインタがNULL
+	- 値のポインタがNULLかチェックが必要
 - ` long bpf_map_update_elem(struct bpf_map *map, const void *key, const void *value, u64 flags)`
 	- keyに対応するvalueの値を更新する
 	- flagsに渡す値によって値がすでに存在している場合の挙動などを指定する
@@ -218,7 +218,7 @@ $ grep -i CONFIG_XDP_SOCKETS /boot/config-$(uname -r)
 各ディストリビューションのインストールについて記載されています．
 
 ### NICの設定
-`Generic XDP`を使用する場合はあまり気にする必要はないですがNative XDP(NICに実際にロードするXDP)を使用する場合mtuやqueueの問題でロードが失敗する可能性があります．
+`Generic XDP`を使用する場合はあまり気にする必要はないですが`Native XDP`(NICに実際にロードするXDP)を使用する場合mtuやqueueの問題でロードが失敗する可能性があります．
 [本実験環境](#実験環境)では以下のコマンドで設定を変更することでNICにXDPをロードすることができました．
 ```shell
 $ sudo ip link set dev ens5 mtu 3498
@@ -365,7 +365,7 @@ __builtin_memset((dest), (chr), (n))
 __builtin_memcpy((dest), (src), (n))
 __builtin_memmove((dest), (src), (n))
 ```
-とはいえ引数は変わらないので気を付けて大丈夫です．
+とはいえ引数は変わらないので気を付けていれば大丈夫です．
 
 #### グローバル変数が使えない
 グローバル変数は使用できません．
@@ -680,10 +680,10 @@ EthernetヘッダやIPv4ヘッダのパースは[packet_counter](#xdp-2)と同�
 基本的にやり方は変わりませんが，IPv4ヘッダは可変長なので`ip->ihl * 4`でヘッダ長を計算して加算してあげる必要があります．
 ```c
 data += ip->ihl * 4;
-  struct tcphdr *tcp = data;
-  if (data + sizeof(*tcp) > data_end) {
-    return XDP_ABORTED;
-  }
+struct tcphdr *tcp = data;
+if (data + sizeof(*tcp) > data_end) {
+  return XDP_ABORTED;
+}
 ```
 その後は`SYN`フラグがついたパケットのみを対象としてperf eventを発火させます．
 `packet_size`はあらかじめ`data - data_end`で求めています．
@@ -788,7 +788,8 @@ $ sudo ip netns exec node1 python3 -m http.server 8888
 ```shell
 $ curl http://192.168.0.2:8888
 ```
-通常通りレスポンスが返ってくると思います．TCP(SYN)パケットがダンプされていると思います．
+通常通りレスポンスが返ってくると思います．
+また，`xdp_dump`を動かしているターミナルではTCP(SYN)パケットがダンプされていると思います．
 ```shell
 All new TCP connection requests (SYN) coming to this host will be dumped here.
 
@@ -981,7 +982,7 @@ Blacklisting IPv4 Addresses...
 #### bpf_redirect_map
 4つめのサンプルは`bpf_redirect_map`です．
 このサンプルはICPMパケットを対象にICMPパケットの送信者にリダイレクトするというものとなっています．
-`basic_firewall`配下の`main.go`と`bpf/xdp_fw.c`から構成されます．
+`bpf_redirect_map`配下の`main.go`と`bpf/xdp.c`から構成されます．
 これまでと同様にXDPとGoに分けて見ていきましょう．
 
 ##### XDP
@@ -1008,7 +1009,7 @@ BPF_MAP_ADD(if_redirect);
 次にXDP関数を見ていきます．
 関数名は`xdp_test`です．
 これまで通りEthernet, IPv4パケットにパースします．
-さらに，IPパケットのプロトコルをみてicmpでなければPASSします．
+さらに，IPパケットのプロトコルをみてICMPでなければPASSします．
 
 続いて，ルートテーブルのlookup処理です．
 XDPではカーネルのルートテーブルを参照することができます．
@@ -1237,9 +1238,11 @@ ICMPのIDをみてみるとどのパケットも58となっています．
 ## おわりに
 今回はXDPに入門してみました．
 だいぶ大作な記事になってしまいました．
+
 XDPの概要やXDPを扱うために必要な周辺知識の紹介，実践編と段階的にXDPを理解できるように書きました．
 結構ハマりどころが多い技術なので，私が勉強する際にハマった箇所はできるだけ書き起こしました．
 XDP関連の日本語の記事はあまり多くないため参考になれば幸いです．
+
 XDPでパケット処理しましょう．
 
 ## 参考
