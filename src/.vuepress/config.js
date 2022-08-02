@@ -37,7 +37,7 @@ module.exports = {
         location: 'Fukuoka City, Japan',
   
         // Your organization
-        organization: 'Kyushu University',
+        organization: '',
   
         // Your avatar image
         // Set to external link
