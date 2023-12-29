@@ -15,6 +15,23 @@ description: XDPに入門します
 前回もXDP関連の話題でしたが，今回はXDPに入門します．
 XDPを学習する際のロードマップやつまりどころの解消になればと思います．
 
+### 2023-12-30 加筆
+
+本記事を公開して約 2 年が経過しました.
+この加筆で古くなってしまった情報を修正しています.
+差分は このブログの Github の [PR](https://github.com/terassyi/blog/pull/57/files) を見てください.
+
+この 2 年間で eBPF 及び XDP への注目はさらに高まったように感じます.
+取得できる情報も充実してきました.
+特に O'reilly より発売された [入門 eBPF](https://www.oreilly.co.jp/books/9784814400560/)(原書: [Learning eBPF](https://www.oreilly.com/library/view/learning-ebpf/9781098135119/)) は非常に充実した内容になっています.
+日本語でこれらの情報に触れられるようになったことは大変ありがたいです.
+
+2023 年は個人的にも XDP に関して新たに発展的なコンテンツを作成しました.
+
+そちらも触っていただければと思います.
+
+[![XDP で作って学ぶファイアウォールとロードバランサー](https://gh-card.dev/repos/terassyi/seccamp-xdp.svg)](https://github.com/terassyi/seccamp-xdp)
+
 ## XDP
 XDPとはeXpress Data Pathの略でLinuxカーネル内で動作するeBPFベースの高性能なパケット処理技術です．
 制限のあるC言語で記述したプログラムをBPFバイトコードにコンパイルし，NICにアタッチすることでカーネルのプロトコルスタックより手前でパケット処理を行うことができます．
@@ -33,7 +50,7 @@ XDPのユースケースとして以下のようなものがあります．
 	- [LINE](https://speakerdeck.com/line_devday2019/software-engineering-that-supports-line-original-lbaas)
 - NAT
 	- [XFLAG](https://speakerdeck.com/mabuchin/zhuan-binagaramonetutowakuchu-li-wo-sohutoueadezi-zuo-siteikuhua)
-- Packet filtering
+- Kubernetes Networking(LB, Conntrack, Network policy)
 	- [Cilium](https://cilium.io/)
 - Router
 
@@ -294,6 +311,10 @@ Go言語でXDPのコントロールプレーンを記述するパッケージが
 今回の実践編のサンプルコードは以下のリポジトリにあります．
 [![terassyi/go-xdp-examples - GitHub](https://gh-card.dev/repos/terassyi/go-xdp-examples.svg)](https://github.com/terassyi/go-xdp-examples)
 
+> **2023/12/30 現在,cilium/ebpfの更新によりコントロールプレーンのコードも古くなってしまっています.**
+> **現在のコントロールプレーンのコードは以下のリポジトリ(冒頭に挙げたコンテンツのリポジトリ)を参照したほうが最新の情報に近いです.**
+> - [github.com/terassyi/seccamp-xdp/scmlb/pkg/loader/loader.go](https://github.com/terassyi/seccamp-xdp/blob/main/scmlb/pkg/loader/loader.go)
+
 ### BPF(XDP)用C言語のお作法
 BPFバイトコードにコンパイルするC言語は様々な制約があると述べました．
 本項ではその制約について具体的な例を示します．
@@ -367,9 +388,20 @@ __builtin_memmove((dest), (src), (n))
 ```
 とはいえ引数は変わらないので気を付けていれば大丈夫です．
 
-#### グローバル変数が使えない
-グローバル変数は使用できません．
-変わりに毎回BPFマップから値をとってくることとなります．
+#### グローバル変数が~~使えない~~使える
+~~グローバル変数は使用できません．~~
+~~変わりに毎回BPFマップから値をとってくることとなります．~~
+
+2019 年 にグローバル変数をサポートする[コミット](https://lore.kernel.org/bpf/20190228231829.11993-7-daniel@iogearbox.net/t/#u)が作成されています.
+また,グローバル変数は[カーネルバージョン 5.5 から使える](https://github.com/falcosecurity/libs/blob/master/proposals/20220329-modern-bpf-probe.md#use-of-bpf-global-variables-kernel-version-55)ようです.
+本記事執筆時点でも使えたようです.
+誤情報を広めていました.
+訂正します.
+
+グローバル変数は内部的にはエントリ数 1 のマップが作成されているようです.
+
+- [サンプルコード](https://github.com/terassyi/seccamp-xdp/blob/main/tutorial/counter.bpf.c#L11)
+
 
 #### 可変長引数を取れない
 可変長引数をとる関数を作成・使用することができません．
